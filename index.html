@@ -2740,8 +2740,27 @@
       <input type="number" id="ebp-amount" placeholder="0.00" step="0.01" min="0">
     </div>
     <div class="ebp-field" id="ebp-linked-cats-field">
-      <label>Linked Transaction Categories (comma-separated)</label>
-      <input type="text" id="ebp-linked-cats" placeholder="e.g. FastFood, Restaurants">
+      <label id="ebp-linked-cats-label">Linked Transaction Categories</label>
+      <div id="ebp-linked-cats-hint" style="font-size:0.72em;color:var(--text-light);font-weight:600;margin-bottom:6px;"></div>
+      <!-- Selected chips -->
+      <div id="ebp-linked-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;min-height:0;"></div>
+      <!-- Search input -->
+      <div style="position:relative;">
+        <input type="text" id="ebp-linked-search"
+          placeholder="Type to search categories..."
+          autocomplete="off"
+          oninput="filterLinkedCatSuggestions(this.value)"
+          onfocus="filterLinkedCatSuggestions(this.value)"
+          style="width:100%;background:#F8F8F8;border:1.5px solid #EEE;border-radius:10px;padding:10px 12px;font-family:inherit;font-weight:700;font-size:0.88em;color:var(--text-dark);outline:none;box-sizing:border-box;">
+        <!-- Suggestions dropdown -->
+        <div id="ebp-linked-suggestions" style="
+          display:none;position:absolute;top:100%;left:0;right:0;z-index:999;
+          background:white;border:1.5px solid #EEE;border-radius:10px;
+          box-shadow:0 8px 24px rgba(0,0,0,0.1);max-height:180px;overflow-y:auto;margin-top:4px;
+        "></div>
+      </div>
+      <!-- Hidden input carries the actual comma-separated value for save logic -->
+      <input type="hidden" id="ebp-linked-cats">
     </div>
     <div class="ebp-actions">
       <button class="ebp-save-btn" onclick="saveEditedBudget()">✅ Save</button>
@@ -6763,14 +6782,14 @@ function openEditBudgetPopup(goalKey, forceType) {
       pickedBudgetEmoji = goal.icon || '💸';
       document.getElementById('ebp-name').value = goal.name || goal.key;
       document.getElementById('ebp-amount').value = goal.amount || '';
-      document.getElementById('ebp-linked-cats').value = (goal.linkedCats || []).join(', ');
+      initLinkedCatPicker(goal.linkedCats || [], editingBudgetType);
       delBtn.style.display = '';
     }
   } else {
     pickedBudgetEmoji = '💸';
     document.getElementById('ebp-name').value = '';
     document.getElementById('ebp-amount').value = '';
-    document.getElementById('ebp-linked-cats').value = '';
+    initLinkedCatPicker([], editingBudgetType);
     delBtn.style.display = 'none';
   }
 
@@ -8970,7 +8989,6 @@ _auth.onAuthStateChanged(async user => {
       'charlesakl@gmail.com',
       'narasimha.neo@gmail.com',
       'ping2rupesh@gmail.com',
-      'ebooksofpnr@gmail.com',
       'pnrkiran@gmail.com'
     ];
 
@@ -9021,6 +9039,153 @@ _auth.onAuthStateChanged(async user => {
     if (_unsubscribeListener) _unsubscribeListener();
   }
 });
+
+// ── Smart Linked Category Picker ─────────────────────────────────────────
+let _linkedCatsSelected = [];
+
+function initLinkedCatPicker(existingCats, budgetType) {
+  // existingCats: array of strings already linked
+  _linkedCatsSelected = existingCats ? [...existingCats] : [];
+  renderLinkedChips();
+  const search = document.getElementById('ebp-linked-search');
+  if (search) search.value = '';
+  syncLinkedCatsHidden();
+
+  // Show context-aware hint
+  const hint = document.getElementById('ebp-linked-cats-hint');
+  if (hint) {
+    if (budgetType === 'savings') {
+      hint.innerHTML = '💡 Maps to <strong>Investing tab</strong> transactions — type a category like Stocks, Gold, Crypto';
+    } else {
+      hint.innerHTML = '💡 Maps to <strong>expense</strong> transactions — type a category like Groceries, FastFood';
+    }
+  }
+}
+
+function getAllAvailableCats(budgetType) {
+  // For savings goals — prioritise investment + savings categories
+  // For expense goals — prioritise expense categories
+  const isSavings = budgetType === 'savings';
+  const all = new Set();
+
+  if (isSavings) {
+    // Investment types first for savings goals
+    ['investment','additional','income','expense'].forEach(t =>
+      getCatsForType(t).forEach(c => all.add(c))
+    );
+    // Pull actual investment transactions used
+    const mk = budgetViewMonth || getCurrentMonthKey();
+    const monthData = data[mk] || {};
+    (monthData.investments || []).forEach(tx => {
+      if (tx.category)    all.add(tx.category);
+      if (tx.investType)  all.add(tx.investType);
+    });
+  } else {
+    // Expense types first for expense goals
+    ['expense','additional','given','income'].forEach(t =>
+      getCatsForType(t).forEach(c => all.add(c))
+    );
+  }
+
+  // Also pull from all transactions ever used
+  Object.keys(data).forEach(mk => {
+    if (!mk.match(/^\d{4}-\d{2}$/)) return;
+    const m = data[mk];
+    ['expenses','investments','additional','income'].forEach(list => {
+      (m[list] || []).forEach(tx => {
+        if (tx.category) all.add(tx.category);
+        if (tx.subCategory) all.add(tx.subCategory);
+        if (tx.investType) all.add(tx.investType);
+      });
+    });
+  });
+
+  return [...all].sort((a,b) => a.localeCompare(b));
+}
+
+function filterLinkedCatSuggestions(query) {
+  const dropdown = document.getElementById('ebp-linked-suggestions');
+  if (!dropdown) return;
+
+  // Pass current budget type so savings shows investment categories
+  const budgetType = (typeof editingBudgetType !== 'undefined') ? editingBudgetType : 'expense';
+  const all = getAllAvailableCats(budgetType);
+  const q = query.trim().toLowerCase();
+  const filtered = all.filter(c =>
+    c.toLowerCase().includes(q) && !_linkedCatsSelected.includes(c)
+  );
+
+  if (filtered.length === 0) {
+    dropdown.style.display = 'none';
+    return;
+  }
+
+  dropdown.innerHTML = filtered.map(c => `
+    <div onclick="addLinkedCat('${c.replace(/'/g, "\'")}')"
+      style="padding:10px 14px;font-size:0.85em;font-weight:700;cursor:pointer;
+             color:var(--text-dark);border-bottom:1px solid #F5F5F5;transition:background 0.1s;"
+      onmouseover="this.style.background='#FFF8E8'"
+      onmouseout="this.style.background='white'">
+      ${c}
+    </div>
+  `).join('');
+  dropdown.style.display = 'block';
+}
+
+function addLinkedCat(cat) {
+  if (!_linkedCatsSelected.includes(cat)) {
+    _linkedCatsSelected.push(cat);
+    renderLinkedChips();
+    syncLinkedCatsHidden();
+  }
+  const search = document.getElementById('ebp-linked-search');
+  if (search) search.value = '';
+  const dropdown = document.getElementById('ebp-linked-suggestions');
+  if (dropdown) dropdown.style.display = 'none';
+}
+
+function removeLinkedCat(cat) {
+  _linkedCatsSelected = _linkedCatsSelected.filter(c => c !== cat);
+  renderLinkedChips();
+  syncLinkedCatsHidden();
+}
+
+function renderLinkedChips() {
+  const wrap = document.getElementById('ebp-linked-chips');
+  if (!wrap) return;
+  if (_linkedCatsSelected.length === 0) {
+    wrap.innerHTML = '';
+    wrap.style.marginBottom = '0';
+    return;
+  }
+  wrap.style.marginBottom = '8px';
+  wrap.innerHTML = _linkedCatsSelected.map(c => `
+    <span style="display:inline-flex;align-items:center;gap:5px;
+      background:var(--yellow-light,#FFF8DC);border:1.5px solid var(--yellow,#F5C842);
+      border-radius:20px;padding:4px 10px 4px 12px;font-size:0.78em;font-weight:800;color:var(--text-dark);">
+      ${c}
+      <span onclick="removeLinkedCat('${c.replace(/'/g, "\'")}')"
+        style="cursor:pointer;font-size:1em;color:#999;line-height:1;margin-left:2px;"
+        onmouseover="this.style.color='#EF4444'" onmouseout="this.style.color='#999'">✕</span>
+    </span>
+  `).join('');
+}
+
+function syncLinkedCatsHidden() {
+  const hidden = document.getElementById('ebp-linked-cats');
+  if (hidden) hidden.value = _linkedCatsSelected.join(', ');
+}
+
+// Close suggestions when clicking outside
+document.addEventListener('click', e => {
+  const dropdown = document.getElementById('ebp-linked-suggestions');
+  const search = document.getElementById('ebp-linked-search');
+  if (dropdown && search && !search.contains(e.target) && !dropdown.contains(e.target)) {
+    dropdown.style.display = 'none';
+  }
+});
+// ── End Smart Linked Category Picker ──────────────────────────────────────
+
 // ══════════════════════════════════════════════════════
 // END FIREBASE SYNC ENGINE
 // ══════════════════════════════════════════════════════
