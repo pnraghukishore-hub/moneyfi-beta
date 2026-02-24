@@ -3235,7 +3235,38 @@ function getCurrentMonthKey() { const n=new Date(); return `${n.getFullYear()}-$
 function getMonthKey(dateStr) { if(!dateStr) return null; const dt=new Date(dateStr); if(isNaN(dt.getTime())) return null; return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}`; }
 function getDisplayMonth(key) { if(!key) return ''; const[y,m]=key.split('-'); return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][parseInt(m)-1]+' '+y; }
 function getFullDisplayMonth(key) { if(!key) return ''; const[y,m]=key.split('-'); return ['January','February','March','April','May','June','July','August','September','October','November','December'][parseInt(m)-1]+' '+y; }
-function normalizeDate(raw) { if(!raw) return new Date().toISOString().split('T')[0]; let str=String(raw).trim(); if(typeof raw==='number'&&raw>30000){const d=Math.floor(raw-25569);return new Date(d*86400*1000).toISOString().split('T')[0];} if(/^\d{4}-\d{2}-\d{2}$/.test(str)) return str; const dt=new Date(str); if(!isNaN(dt.getTime())) return dt.toISOString().split('T')[0]; return new Date().toISOString().split('T')[0]; }
+function normalizeDate(raw) {
+  if (!raw) return todayStr();
+  let str = String(raw).trim();
+  // Excel serial date number
+  if (typeof raw === 'number' && raw > 30000) {
+    const d = Math.floor(raw - 25569);
+    return parseDateSafe(new Date(d * 86400 * 1000).toISOString().split('T')[0]);
+  }
+  // Already YYYY-MM-DD — use as-is, no timezone conversion needed
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
+  return parseDateSafe(str);
+}
+
+// Safe local date parser — avoids UTC midnight shifting to previous day
+function parseDateSafe(str) {
+  if (!str) return todayStr();
+  str = String(str).trim();
+  // Already YYYY-MM-DD — return directly
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
+  // Try parsing — use local date parts to avoid UTC shift
+  const d = new Date(str);
+  if (isNaN(d.getTime())) return todayStr();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return \`\${y}-\${m}-\${day}\`;
+}
+
+function todayStr() {
+  const d = new Date();
+  return \`\${d.getFullYear()}-\${String(d.getMonth()+1).padStart(2,'0')}-\${String(d.getDate()).padStart(2,'0')}\`;
+}
 function ensureMonth(key) { if(!data[key]) data[key]={income:[],expenses:[],investments:[],additional:[],realEstate:[],metals:[],givenToOthers:[],debts:[]}; }
 function save() {
   // Always keep localStorage as offline backup
@@ -8371,9 +8402,8 @@ function processREImport(rows, headers) {
     const desc = descCol >= 0 ? String(row[descCol]||'').trim() : '';
     const pv = parseFloat(String(row[pvCol>=0?pvCol:0]||'0').replace(/[^\d.]/g,''))||0;
     if (!pv && !desc) return;
-    const rawDate = dateCol >= 0 ? String(row[dateCol]||'') : '';
-    const d = new Date(rawDate);
-    const dateStr = !isNaN(d) ? d.toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+    const rawDate = dateCol >= 0 ? String(row[dateCol]||'').trim() : '';
+    const dateStr = parseDateSafe(rawDate);
     reAssets.push({
       date: dateStr,
       country: countryCol >= 0 ? String(row[countryCol]||'').trim() : 'US',
