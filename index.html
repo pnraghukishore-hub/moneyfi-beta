@@ -3680,8 +3680,9 @@ function openQuickAdd(type, subCat) {
   // Reset edit mode
   qaEditMode = false; qaEditMonthKey = null; qaEditType = null; qaEditIdx = null;
   const _rw = document.getElementById('qa-refund-wrap');
-  if (_rw) _rw.style.display = 'none';
   const _rt = document.getElementById('qa-refund-toggle');
+  // Show refund toggle immediately if opening as expense type
+  if (_rw) _rw.style.display = (qaType === 'expense') ? 'block' : 'none';
   if (_rt) { _rt.classList.remove('active'); _rt.textContent = '↩️ Mark as Refund / Return'; }
   document.getElementById('quick-add-modal').classList.add('open');
 }
