@@ -6290,8 +6290,8 @@ function getBudgetActual(goal, monthKey) {
   ['expenses', 'investments', 'additional'].forEach(listKey => {
     (m[listKey] || []).forEach(e => {
       const ec = (e.category || '').toLowerCase().trim();
-      const ed = (e.description || '').toLowerCase().trim();
-      if (cats.some(c => ec.includes(c) || (listKey === 'investments' && (ed.includes(c) || ec.includes(c))))) {
+      // Exact match only — prevents 'parent' matching 'parents', 'gold' matching 'onegold' etc.
+      if (cats.some(c => ec === c)) {
         total += convertAmt(e.amount, e.currency);
       }
     });
@@ -6654,7 +6654,8 @@ function _renderBudgetDetail(prefix, goal, type) {
   ['expenses', 'investments', 'additional'].forEach(listKey => {
     (m[listKey] || []).forEach(e => {
       const ec = (e.category || '').toLowerCase().trim();
-      if (cats.some(c => ec.includes(c))) txns.push({ ...e, _type: listKey });
+      // Exact match — keep in sync with getBudgetActual
+      if (cats.some(c => ec === c)) txns.push({ ...e, _type: listKey });
     });
   });
   txns.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
@@ -8275,6 +8276,7 @@ function processREImport(rows, headers) {
       currentValue: cvCol >= 0 ? parseFloat(String(row[cvCol]||'0').replace(/[^\d.]/g,''))||pv : pv,
       description: desc,
       area: areaCol >= 0 ? String(row[areaCol]||'').trim() : '',
+      areaCents: areaCol >= 0 ? parseFloat(String(row[areaCol]||'0').replace(/[^\d.]/g,''))||0 : 0,
     });
     imported++;
   });
@@ -8309,7 +8311,7 @@ function renderResetSummary() {
   const givenEl = document.getElementById('reset-given-count');
   if (givenEl) givenEl.textContent = (data._given||[]).length + ' records';
   const reEl = document.getElementById('reset-re-count');
-  if (reEl) reEl.textContent = ((data._realEstate||{}).assets||[]).length + ' properties';
+  if (reEl) reEl.textContent = (data._realEstate||[]).length + ' properties';
   const nwEl = document.getElementById('reset-nw-count');
   if (nwEl) nwEl.textContent = (data._nwAccounts||[]).length + ' accounts';
 }
@@ -8372,7 +8374,7 @@ function clearDataset(type) {
   if (!confirm(`Clear all ${labels[type]||type} data? Your transactions will NOT be affected.`)) return;
   if (type === 'metals')     { data._metals = []; }
   if (type === 'given')      { data._given = []; }
-  if (type === 'realestate') { if (data._realEstate) data._realEstate.assets = []; }
+  if (type === 'realestate') { data._realEstate = []; }
   if (type === 'networth')   { data._nwAccounts = []; }
   save();
   renderResetSummary();
