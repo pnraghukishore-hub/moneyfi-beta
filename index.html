@@ -8832,6 +8832,25 @@ function showSyncStatus(msg, color='#10B981', duration=2500) {
   }
 }
 
+// ── Family vs Personal data routing ──────────────────────────────────────
+const FAMILY_EMAILS = [
+  'pnraghukishore@gmail.com',
+  'swathikishore12@gmail.com',
+  'skanda.penujuri@gmail.com'
+];
+const FAMILY_DOC_ID = 'kishore-family';
+
+function getDataRef(db, uid, email) {
+  const isFamily = FAMILY_EMAILS.includes((email || '').toLowerCase());
+  if (isFamily) {
+    // Family members share one document
+    return db.collection('families').doc(FAMILY_DOC_ID);
+  } else {
+    // Everyone else gets their own private document
+    return db.collection('users').doc(uid);
+  }
+}
+
 // ── Firebase Save: chunked to stay under 1MB Firestore limit ──────────────
 let _saveTimer = null;
 function firebaseSave() {
@@ -8843,7 +8862,8 @@ function firebaseSave() {
 
 function _doFirebaseSave() {
   if (!window._fbUser) return;
-  const uid = window._fbUser.uid;
+  const uid   = window._fbUser.uid;
+  const email = window._fbUser.email;
   showSyncStatus('☁️ Saving...', '#3B9EFF', 0);
 
   // Split data into chunks to stay well under Firestore 1MB doc limit
@@ -8858,11 +8878,11 @@ function _doFirebaseSave() {
     else chunk1[k] = data[k];
   });
 
-  const userRef = _db.collection('users').doc(uid);
+  const baseRef = getDataRef(_db, uid, email);
   const batch = _db.batch();
-  batch.set(userRef.collection('appData').doc('main'),
+  batch.set(baseRef.collection('appData').doc('main'),
     { ...chunk1, _savedAt: firebase.firestore.FieldValue.serverTimestamp() });
-  batch.set(userRef.collection('appData').doc('assets'),
+  batch.set(baseRef.collection('appData').doc('assets'),
     { ...chunk2, _savedAt: firebase.firestore.FieldValue.serverTimestamp() });
 
   batch.commit()
@@ -8876,11 +8896,12 @@ function _doFirebaseSave() {
 // ── Firebase Load: merge chunks back into data ────────────────────────────
 async function firebaseLoad(uid) {
   showSyncStatus('☁️ Loading your data...', '#3B9EFF', 0);
+  const email = window._fbUser ? window._fbUser.email : '';
   try {
-    const userRef = _db.collection('users').doc(uid);
+    const baseRef = getDataRef(_db, uid, email);
     const [mainSnap, assetsSnap] = await Promise.all([
-      userRef.collection('appData').doc('main').get(),
-      userRef.collection('appData').doc('assets').get()
+      baseRef.collection('appData').doc('main').get(),
+      baseRef.collection('appData').doc('assets').get()
     ]);
 
     const mainData   = mainSnap.exists   ? mainSnap.data()   : {};
@@ -8923,7 +8944,9 @@ async function firebaseLoad(uid) {
 let _unsubscribeListener = null;
 function startRealtimeSync(uid) {
   if (_unsubscribeListener) _unsubscribeListener();
-  const mainRef = _db.collection('users').doc(uid).collection('appData').doc('main');
+  const email = window._fbUser ? window._fbUser.email : '';
+  const baseRef = getDataRef(_db, uid, email);
+  const mainRef = baseRef.collection('appData').doc('main');
   _unsubscribeListener = mainRef.onSnapshot(snap => {
     if (!snap.exists || snap.metadata.hasPendingWrites) return;
     // Another device updated data — reload silently
