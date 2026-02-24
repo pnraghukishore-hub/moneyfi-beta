@@ -1731,7 +1731,10 @@
 
   <!-- FX Exchange Rates -->
   <div class="settings-card">
-    <div class="settings-title">💱 Exchange Rates <span id="fx-override-badge" style="display:none;background:#F0FFF4;color:#10B981;font-size:0.65em;border-radius:8px;padding:2px 8px;font-weight:800;margin-left:6px;vertical-align:middle;">✏️ Custom</span></div>
+    <div class="settings-title" style="display:flex;align-items:center;justify-content:space-between;">
+    <span>💱 Exchange Rates <span id="fx-override-badge" style="display:none;background:#F0FFF4;color:#10B981;font-size:0.65em;border-radius:8px;padding:2px 8px;font-weight:800;margin-left:6px;vertical-align:middle;">✏️ Custom</span></span>
+    <button onclick="clearAllFXOverrides()" id="fx-clear-all-btn" style="display:none;background:#FFF0F0;border:1.5px solid #EF444430;border-radius:8px;padding:4px 10px;font-size:0.72em;font-weight:800;color:#EF4444;cursor:pointer;">🗑 Clear All Overrides</button>
+  </div>
     <p style="font-size:0.82em;color:var(--text-light);font-weight:600;margin-bottom:12px;">Rates used to convert your multi-currency assets &amp; transactions to <span id="fx-base-label">USD</span>. Override any rate if the built-in estimate is off.</p>
     <div id="fx-rates-list"></div>
     <div style="margin-top:10px;font-size:0.72em;color:var(--text-light);font-weight:600;">
@@ -2992,13 +2995,14 @@ function sym() { return currentCurrency.symbol; }
 // ── Approximate FX rates relative to USD (updated periodically by user via Settings if needed)
 // Values = 1 USD → N units of that currency
 const FX_USD_BASE = {
-  USD:1, EUR:0.92, GBP:0.79, INR:83.5, AED:3.67, SAR:3.75,
-  CAD:1.36, AUD:1.53, JPY:149, CNY:7.24, SGD:1.34, CHF:0.89,
-  MYR:4.72, HKD:7.82, NZD:1.63, KWD:0.31, QAR:3.64, OMR:0.38,
-  PKR:278, BDT:110, LKR:310, NPR:133, MXN:17.1, BRL:4.97,
-  ZAR:18.6, NGN:1550, KES:129, EGP:48.5, TRY:32.2, RUB:91,
-  SEK:10.4, NOK:10.6, DKK:6.88, IDR:15700, PHP:55.8, THB:35,
-  VND:24500, KRW:1320,
+  // Rates as of Feb 2026 — override any in Settings → Currency for precision
+  USD:1, EUR:0.96, GBP:0.80, INR:86.5, AED:3.67, SAR:3.75,
+  CAD:1.43, AUD:1.60, JPY:151, CNY:7.28, SGD:1.35, CHF:0.91,
+  MYR:4.45, HKD:7.78, NZD:1.77, KWD:0.31, QAR:3.64, OMR:0.38,
+  PKR:279, BDT:110, LKR:310, NPR:133, MXN:20.4, BRL:5.85,
+  ZAR:18.3, NGN:1600, KES:129, EGP:48.5, TRY:36.5, RUB:91,
+  SEK:10.8, NOK:11.1, DKK:7.15, IDR:16200, PHP:58.5, THB:34,
+  VND:25400, KRW:1450,
 };
 
 // Convert an amount from entryCurrency to displayCurrency
@@ -4297,7 +4301,10 @@ function renderFXRatesPanel() {
   const baseLabel = document.getElementById('fx-base-label');
   if (baseLabel) baseLabel.textContent = displayCode;
   const badge = document.getElementById('fx-override-badge');
-  if (badge) badge.style.display = Object.keys(overrides).length > 0 ? '' : 'none';
+  const clearAllBtn = document.getElementById('fx-clear-all-btn');
+  const hasAnyOverride = Object.keys(overrides).length > 0;
+  if (badge) badge.style.display = hasAnyOverride ? '' : 'none';
+  if (clearAllBtn) clearAllBtn.style.display = hasAnyOverride ? '' : 'none';
 
   if (activeCurrencies.length === 0) {
     el.innerHTML = `<div style="font-size:0.82em;color:var(--text-light);font-weight:600;text-align:center;padding:16px;">
@@ -4424,6 +4431,16 @@ function resetFXOverride(code) {
   renderNetWorth();
   renderHome();
   showToast(`${code} rate reset to built-in default`);
+}
+
+function clearAllFXOverrides() {
+  if (!confirm('Clear ALL custom FX rate overrides? Built-in rates will be used.')) return;
+  data._fxOverrides = {};
+  save();
+  renderFXRatesPanel();
+  renderNetWorth();
+  renderHome();
+  showToast('✅ All FX overrides cleared — using built-in rates');
 }
 
 // ══════════════════════════════════════════════════════
@@ -9049,6 +9066,18 @@ async function firebaseLoad(uid) {
     if (Object.keys(merged).length > 0) {
       // Cloud data exists — merge with local (cloud wins for conflicts)
       data = { ...data, ...merged };
+      // ── Migration: clear stale FX overrides that were set incorrectly ──
+      // If INR override doesn't match current FX_USD_BASE ± 5%, clear it
+      // so the updated base rate (86.5) takes effect cleanly
+      if (data._fxOverrides && data._fxOverrides['INR']) {
+        const storedRate = data._fxOverrides['INR'];
+        const baseRate   = FX_USD_BASE['INR'];
+        const pctDiff    = Math.abs(storedRate - baseRate) / baseRate;
+        if (pctDiff > 0.05) {  // more than 5% off — likely a bad override
+          console.log(`[Migration] Clearing stale INR override ${storedRate} (base is ${baseRate})`);
+          delete data._fxOverrides['INR'];
+        }
+      }
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
       showSyncStatus('✅ Data loaded from cloud', '#10B981', 2500);
     } else {
