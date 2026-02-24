@@ -8979,6 +8979,10 @@ function signInWithGoogle() {
   }
 }
 
+// ── Expose auth functions globally (needed when login HTML is outside main doc) ──
+window.signInWithGoogle = function() { signInWithGoogle(); };
+window.signOut = function() { signOut(); };
+
 // ── Redirect result gate — ensures onAuthStateChanged waits for redirect ──
 let _redirectHandled = false;
 const _redirectPromise = _auth.getRedirectResult()
@@ -9092,7 +9096,6 @@ _auth.onAuthStateChanged(async user => {
     }
   </script>
 </body>
-</html
 <!-- ═══════════════════════════════ LOGIN SCREEN ═══════════════════════════════ -->
 <div id="screen-login" style="
   position:fixed;inset:0;z-index:9999;
@@ -9151,3 +9154,5 @@ _auth.onAuthStateChanged(async user => {
 <!-- ══════════════════════════════════════════════════════════════════════════ -->
 
 >
+</body>
+</html>
