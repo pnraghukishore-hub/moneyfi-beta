@@ -8989,7 +8989,6 @@ _auth.onAuthStateChanged(async user => {
       'charlesakl@gmail.com',
       'narasimha.neo@gmail.com',
       'ping2rupesh@gmail.com',
-      'ebooksofpnr@gmail.com',
       'pnrkiran@gmail.com'
     ];
 
@@ -9116,12 +9115,10 @@ function filterLinkedCatSuggestions(query) {
     c.toLowerCase().includes(q) && !_linkedCatsSelected.includes(c)
   );
 
-  if (filtered.length === 0) {
-    dropdown.style.display = 'none';
-    return;
-  }
+  const trimmed = query.trim();
 
-  dropdown.innerHTML = filtered.map(c => `
+  // Build suggestion rows
+  const rows = filtered.map(c => `
     <div onclick="addLinkedCat('${c.replace(/'/g, "\'")}')"
       style="padding:10px 14px;font-size:0.85em;font-weight:700;cursor:pointer;
              color:var(--text-dark);border-bottom:1px solid #F5F5F5;transition:background 0.1s;"
@@ -9130,7 +9127,129 @@ function filterLinkedCatSuggestions(query) {
       ${c}
     </div>
   `).join('');
+
+  // If no match AND user typed something — show inline create option
+  const alreadyExists = trimmed && getAllAvailableCats(budgetType).some(c => c.toLowerCase() === trimmed.toLowerCase());
+  const createRow = trimmed && !alreadyExists ? `
+    <div onclick="createAndAddLinkedCat('${trimmed.replace(/'/g, "\'")}')"
+      style="padding:10px 14px;font-size:0.85em;font-weight:800;cursor:pointer;
+             color:#10B981;border-top:${filtered.length>0?'1.5px solid #F0F0F0':'none'};
+             display:flex;align-items:center;gap:8px;transition:background 0.1s;"
+      onmouseover="this.style.background='#F0FBF3'"
+      onmouseout="this.style.background='white'">
+      <span style="background:#10B981;color:white;border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-size:0.9em;flex-shrink:0;">+</span>
+      Create <strong style="margin-left:3px;">"${trimmed}"</strong> as new category
+    </div>
+  ` : '';
+
+  if (!rows && !createRow) {
+    dropdown.style.display = 'none';
+    return;
+  }
+
+  dropdown.innerHTML = rows + createRow;
   dropdown.style.display = 'block';
+}
+
+// ── Create new category inline and add to picker + app ────────────────────
+function createAndAddLinkedCat(catName) {
+  const budgetType = (typeof editingBudgetType !== 'undefined') ? editingBudgetType : 'expense';
+  const trimmed = catName.trim();
+  if (!trimmed) return;
+
+  if (budgetType === 'savings') {
+    // Add to investment custom categories
+    const cc = getCustomCats();
+    if (!cc.investment) cc.investment = [...getCatsForType('investment')];
+    if (!cc.investment.includes(trimmed)) {
+      cc.investment.push(trimmed);
+      data._customCats = cc;
+    }
+
+    // Add to Home Investing cards so it appears instantly
+    const cards = getHomeInvCards();
+    const alreadyCard = cards.find(c => c.key === trimmed);
+    if (!alreadyCard) {
+      // Pick a color from a palette based on name hash
+      const palette = [
+        {color:'#6366F1',bg:'#EEF2FF'},{color:'#EC4899',bg:'#FDF2F8'},
+        {color:'#14B8A6',bg:'#F0FDFA'},{color:'#F97316',bg:'#FFF7ED'},
+        {color:'#8B5CF6',bg:'#F5F3FF'},{color:'#0EA5E9',bg:'#F0F9FF'},
+        {color:'#10B981',bg:'#ECFDF5'},{color:'#D97706',bg:'#FFFBEB'},
+      ];
+      const pick = palette[trimmed.charCodeAt(0) % palette.length];
+      cards.push({
+        key: trimmed,
+        label: trimmed,
+        icon: '💼',
+        color: pick.color,
+        bg: pick.bg,
+        fieldTemplate: 'General',
+        visible: true
+      });
+      saveHomeInvCards(cards);
+    } else if (!alreadyCard.visible) {
+      // Card exists but was hidden — make it visible
+      alreadyCard.visible = true;
+      saveHomeInvCards(cards);
+    }
+
+    // Re-render home investing tab instantly
+    if (typeof renderHome === 'function') renderHome();
+
+    showToast(`✅ "${trimmed}" added to Investing tab`);
+
+  } else {
+    // Expense — add to expense custom categories
+    const cc = getCustomCats();
+    if (!cc.expense) cc.expense = [...getCatsForType('expense')];
+    if (!cc.expense.includes(trimmed)) {
+      cc.expense.push(trimmed);
+      data._customCats = cc;
+    }
+
+    // Add to Home Spending cards
+    const spendCards = getHomeSpendCards();
+
+    // Check if it already exists as a subcat of any existing card
+    const existingCard = spendCards.find(c =>
+      (c.subcats || []).some(s => s.toLowerCase() === trimmed.toLowerCase()) ||
+      (c.label || '').toLowerCase() === trimmed.toLowerCase()
+    );
+
+    if (!existingCard) {
+      // Create a new spending card for this category
+      const palette = [
+        {color:'#FF6B35',cls:'food'},  {color:'#4A9EFF',cls:'transport'},
+        {color:'#FF4757',cls:'shopping'},{color:'#4ECDC4',cls:'health'},
+        {color:'#FF6B9D',cls:'giving'},{color:'#7C3AED',cls:'other-cat'},
+        {color:'#F59E0B',cls:'other-cat'},{color:'#64B5F6',cls:'other-cat'},
+      ];
+      const pick = palette[trimmed.charCodeAt(0) % palette.length];
+      spendCards.push({
+        key: trimmed.toLowerCase().replace(/\s+/g,'_'),
+        label: trimmed,
+        icon: '🏷️',
+        color: pick.color,
+        cls: pick.cls,
+        subcats: [trimmed],
+        visible: true
+      });
+      saveHomeSpendCards(spendCards);
+      showToast(`✅ "${trimmed}" added to Spending tab`);
+    } else {
+      // Already mapped to a card — just confirm
+      showToast(`✅ "${trimmed}" linked to "${existingCard.label}" on Spending tab`);
+    }
+
+    // Re-render home spending tab instantly
+    if (typeof renderHome === 'function') renderHome();
+  }
+
+  save();
+
+  // Now add to the picker chips
+  addLinkedCat(trimmed);
 }
 
 function addLinkedCat(cat) {
