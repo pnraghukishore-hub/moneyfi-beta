@@ -567,7 +567,7 @@
     .qa-key.qa-dot { font-size: 1.3em; }
     .qa-key.qa-save { background: var(--yellow); color: var(--text-dark); font-size: 0.9em; font-weight: 900; }
     .qa-key.qa-save:active { background: #E8B800; }
-    #qa-refund-toggle.active { background:#EF4444;color:white;border-color:#EF4444; }
+    #qa-refund-toggle.active { background:#EF4444 !important;color:white !important;border-color:#EF4444 !important; }
 
     /* ══ SETTINGS ══ */
     .settings-card { background: var(--white); border-radius: var(--radius); padding: 24px; box-shadow: var(--card-shadow); margin-bottom: 16px; }
@@ -2791,12 +2791,6 @@
   <div class="modal">
     <div class="modal-header">
       <div class="modal-title" id="qa-modal-title">➕ Quick Add</div>
-      <button id="qa-refund-toggle" onclick="qaToggleRefund()" style="
-        display:none;align-items:center;gap:5px;
-        background:#FFF0F0;border:1.5px solid #EF444440;border-radius:20px;
-        padding:4px 12px;font-family:Nunito,sans-serif;font-weight:800;
-        font-size:0.75em;color:#EF4444;cursor:pointer;margin-top:4px;
-      ">↩️ Mark as Refund</button>
       <button class="modal-close" onclick="closeModal('quick-add-modal')">✕</button>
     </div>
     <!-- Type selector -->
@@ -2807,6 +2801,15 @@
       <div class="qa-type-chip" onclick="qaSetType('debt',this)">📉 Debt</div>
       <div class="qa-type-chip" onclick="qaSetType('given',this)">🤝 Given</div>
       <div class="qa-type-chip" onclick="qaSetType('additional',this)">🎁 Additional</div>
+    </div>
+    <!-- Refund toggle — shown only for Expense type -->
+    <div id="qa-refund-wrap" style="display:none;margin-bottom:10px;">
+      <button id="qa-refund-toggle" onclick="qaToggleRefund()" style="
+        display:inline-flex;align-items:center;gap:6px;
+        background:#FFF0F0;border:1.5px solid #EF444440;border-radius:20px;
+        padding:7px 16px;font-family:Nunito,sans-serif;font-weight:800;
+        font-size:0.82em;color:#EF4444;cursor:pointer;width:100%;justify-content:center;
+      ">↩️ Mark as Refund / Return</button>
     </div>
     <!-- Amount display -->
     <div class="qa-amount-row">
@@ -3676,8 +3679,10 @@ function openQuickAdd(type, subCat) {
 
   // Reset edit mode
   qaEditMode = false; qaEditMonthKey = null; qaEditType = null; qaEditIdx = null;
-  document.getElementById('qa-refund-toggle').style.display = 'none';
-  document.getElementById('qa-refund-toggle').classList.remove('active');
+  const _rw = document.getElementById('qa-refund-wrap');
+  if (_rw) _rw.style.display = 'none';
+  const _rt = document.getElementById('qa-refund-toggle');
+  if (_rt) { _rt.classList.remove('active'); _rt.textContent = '↩️ Mark as Refund / Return'; }
   document.getElementById('quick-add-modal').classList.add('open');
 }
 
@@ -3712,14 +3717,20 @@ function openEditTx(monthKey, type, idx) {
   qaRenderNumpad();
 
   // Show refund toggle for expense — pre-tick if amount was negative
+  const refundWrap = document.getElementById('qa-refund-wrap');
   const refundBtn = document.getElementById('qa-refund-toggle');
   if (type === 'expense') {
-    refundBtn.style.display = 'flex';
-    if (Number(tx.amount) < 0) refundBtn.classList.add('active');
-    else refundBtn.classList.remove('active');
+    if (refundWrap) refundWrap.style.display = 'block';
+    if (Number(tx.amount) < 0) {
+      refundBtn.classList.add('active');
+      refundBtn.textContent = '↩️ Refund / Return (ON)';
+    } else {
+      refundBtn.classList.remove('active');
+      refundBtn.textContent = '↩️ Mark as Refund / Return';
+    }
   } else {
-    refundBtn.style.display = 'none';
-    refundBtn.classList.remove('active');
+    if (refundWrap) refundWrap.style.display = 'none';
+    if (refundBtn) refundBtn.classList.remove('active');
   }
 
   // Update title
@@ -3731,12 +3742,10 @@ function openEditTx(monthKey, type, idx) {
 function qaSetType(type, el) {
   qaType = type;
   // Show refund toggle only for expense type
-  const refundBtn = document.getElementById('qa-refund-toggle');
-  if (refundBtn) {
-    refundBtn.style.display = type === 'expense' ? 'flex' : 'none';
-    refundBtn.classList.remove('active');
-    refundBtn.textContent = '↩️ Mark as Refund';
-  }
+  const refundWrap = document.getElementById('qa-refund-wrap');
+  const refundBtn  = document.getElementById('qa-refund-toggle');
+  if (refundWrap) refundWrap.style.display = type === 'expense' ? 'block' : 'none';
+  if (refundBtn)  { refundBtn.classList.remove('active'); refundBtn.textContent = '↩️ Mark as Refund / Return'; }
   document.querySelectorAll('.qa-type-chip').forEach(c => c.classList.remove('active'));
   el.classList.add('active');
   qaPreselectSubCat = null;
