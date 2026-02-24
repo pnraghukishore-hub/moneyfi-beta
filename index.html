@@ -3260,12 +3260,12 @@ function parseDateSafe(str) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
-  return \`\${y}-\${m}-\${day}\`;
+  return `${y}-${m}-${day}`;
 }
 
 function todayStr() {
   const d = new Date();
-  return \`\${d.getFullYear()}-\${String(d.getMonth()+1).padStart(2,'0')}-\${String(d.getDate()).padStart(2,'0')}\`;
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 function ensureMonth(key) { if(!data[key]) data[key]={income:[],expenses:[],investments:[],additional:[],realEstate:[],metals:[],givenToOthers:[],debts:[]}; }
 function save() {
