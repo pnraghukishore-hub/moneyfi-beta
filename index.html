@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <!-- ═══ PWA: MoneyFi ═══ -->
-  <link rel="manifest" href="./manifest.json">
+  <link rel="manifest" href="manifest.json">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -8934,75 +8934,20 @@ function startRealtimeSync(uid) {
 }
 
 // ── Auth state handler ────────────────────────────────────────────────────
-// ── Detect if running as installed PWA (standalone mode) ─────────────────
-function isStandalonePWA() {
-  return window.navigator.standalone === true ||
-         window.matchMedia('(display-mode: standalone)').matches;
-}
-
 function signInWithGoogle() {
   const btn = document.getElementById('google-signin-btn');
   const statusEl = document.getElementById('login-status');
   if (btn) btn.disabled = true;
+  if (statusEl) statusEl.textContent = 'Signing in...';
 
   const provider = new firebase.auth.GoogleAuthProvider();
-
-  if (isStandalonePWA()) {
-    // ── PWA mode: Safari standalone blocks redirects to external domains.
-    // Show instructions to open in Safari browser for sign-in.
-    if (btn) btn.disabled = false;
-    if (statusEl) {
-      statusEl.innerHTML = `
-        <div style="background:rgba(255,255,255,0.12);border-radius:12px;padding:16px;margin-top:8px;text-align:left;">
-          <div style="font-weight:800;font-size:0.95em;margin-bottom:8px;">📱 One-time setup needed</div>
-          <div style="font-size:0.82em;line-height:1.6;opacity:0.85;">
-            To sign in, open MoneyFi in <strong>Safari browser</strong> first:<br><br>
-            1. Tap the <strong>Share button</strong> (box with arrow) below<br>
-            2. Tap <strong>"Open in Safari"</strong><br>
-            3. Sign in with Google there<br>
-            4. Come back to this app — you'll stay signed in ✅
-          </div>
-          <button onclick="window.open(window.location.href,'_blank')" style="margin-top:12px;width:100%;background:white;color:#1E2A6E;border:none;border-radius:10px;padding:10px;font-weight:800;font-size:0.88em;cursor:pointer;">
-            🌐 Open in Safari
-          </button>
-        </div>`;
-    }
-  } else {
-    // ── Browser mode: use redirect (works fine in Safari/Chrome browser)
-    if (statusEl) statusEl.textContent = 'Redirecting to Google...';
-    _auth.signInWithRedirect(provider)
-      .catch(err => {
-        console.error('Sign in error:', err);
-        if (btn) btn.disabled = false;
-        if (statusEl) statusEl.textContent = 'Sign in failed — please try again';
-      });
-  }
+  _auth.signInWithPopup(provider)
+    .catch(err => {
+      console.error('Sign in error:', err);
+      if (btn) btn.disabled = false;
+      if (statusEl) statusEl.textContent = 'Sign in failed — please try again';
+    });
 }
-
-// ── Expose auth functions globally (needed when login HTML is outside main doc) ──
-window.signInWithGoogle = function() { signInWithGoogle(); };
-window.signOut = function() { signOut(); };
-
-// ── Redirect result gate — ensures onAuthStateChanged waits for redirect ──
-let _redirectHandled = false;
-const _redirectPromise = _auth.getRedirectResult()
-  .then(result => {
-    _redirectHandled = true;
-    if (result && result.user) {
-      const statusEl = document.getElementById('login-status');
-      if (statusEl) statusEl.textContent = 'Signing you in...';
-    }
-  })
-  .catch(err => {
-    _redirectHandled = true;
-    // Silence 'Params are not set' — this just means no redirect was in progress
-    if (err && err.message && (err.message.includes('Params are not set') || err.code === 'auth/no-auth-event')) return;
-    console.error('Redirect result error:', err);
-    const statusEl = document.getElementById('login-status');
-    if (statusEl) statusEl.textContent = 'Sign in failed — please try again';
-    const btn = document.getElementById('google-signin-btn');
-    if (btn) btn.disabled = false;
-  });
 
 function signOut() {
   if (_unsubscribeListener) _unsubscribeListener();
@@ -9013,15 +8958,12 @@ function signOut() {
   });
 }
 
-// ── Auth state change — waits for redirect to complete first ──────────────
+// ── Auth state change ─────────────────────────────────────────────────────
 _auth.onAuthStateChanged(async user => {
-  // Wait for getRedirectResult to finish before acting
-  await _redirectPromise;
-
   const loginScreen = document.getElementById('screen-login');
 
   if (user) {
-    // ── Allowlist check — only permitted emails can access ──
+    // ── Allowlist check — only family members can access ──
     const ALLOWED_EMAILS = [
       'pnraghukishore@gmail.com',
       'swathikishore12@gmail.com',
@@ -9030,7 +8972,7 @@ _auth.onAuthStateChanged(async user => {
       'charlesakl@gmail.com',
       'narasimha.neo@gmail.com',
       'ping2rupesh@gmail.com',
-      'sunil.voldemort@gmail.com'
+      'pnrkiran@gmail.com'
     ];
 
     if (!ALLOWED_EMAILS.includes(user.email.toLowerCase())) {
@@ -9096,6 +9038,7 @@ _auth.onAuthStateChanged(async user => {
     }
   </script>
 </body>
+</html
 <!-- ═══════════════════════════════ LOGIN SCREEN ═══════════════════════════════ -->
 <div id="screen-login" style="
   position:fixed;inset:0;z-index:9999;
@@ -9154,5 +9097,3 @@ _auth.onAuthStateChanged(async user => {
 <!-- ══════════════════════════════════════════════════════════════════════════ -->
 
 >
-</body>
-</html>
