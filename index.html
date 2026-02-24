@@ -7029,7 +7029,7 @@ function getRealEstateAssets() {
   return data._realEstate;
 }
 
-const INR_TO_USD = 0.012;
+// INR_TO_USD removed — all currency conversion goes through convertAmt() which respects user overrides
 
 // ── Convert account balance to display currency ──
 function nwConvert(balance, currency) {
@@ -7083,14 +7083,14 @@ function computeNetWorth() {
   const reFromImport = (data._realEstate || []).map((p, idx) => {
     const cv = Number(p.currentValue || p.purchaseValue || 0);
     const curr = (p.currency || 'USD').toUpperCase();
-    const val = curr === 'INR' ? cv * (INR_TO_USD||0.012) : nwConvert(cv, curr);
+    // Store raw value + real currency — let nwConvert handle conversion once, consistently
     const nameParts = ['🏡', p.description || 'Property'];
     if (p.country && p.country !== 'US') nameParts.push(p.country);
     return {
       id: 'import_re_' + idx,
       name: nameParts.join(' '),
-      balance: val,
-      currency: curr,
+      balance: cv,      // raw value in original currency
+      currency: curr,   // nwConvert will convert correctly
       lastUpdated: p.date || '',
       _imported: true,
       type: 'realestate',
@@ -8382,6 +8382,7 @@ function processREImport(rows, headers) {
       currentValue: cvCol >= 0 ? parseFloat(String(row[cvCol]||'0').replace(/[^\d.]/g,''))||pv : pv,
       description: desc,
       area: areaCol >= 0 ? String(row[areaCol]||'').trim() : '',
+      areaCents: areaCol >= 0 ? parseFloat(String(row[areaCol]||'0').replace(/[^\d.]/g,''))||0 : 0,
     });
     imported++;
   });
@@ -8416,7 +8417,7 @@ function renderResetSummary() {
   const givenEl = document.getElementById('reset-given-count');
   if (givenEl) givenEl.textContent = (data._given||[]).length + ' records';
   const reEl = document.getElementById('reset-re-count');
-  if (reEl) reEl.textContent = ((data._realEstate||{}).assets||[]).length + ' properties';
+  if (reEl) reEl.textContent = (data._realEstate||[]).length + ' properties';
   const nwEl = document.getElementById('reset-nw-count');
   if (nwEl) nwEl.textContent = (data._nwAccounts||[]).length + ' accounts';
 }
@@ -8479,7 +8480,7 @@ function clearDataset(type) {
   if (!confirm(`Clear all ${labels[type]||type} data? Your transactions will NOT be affected.`)) return;
   if (type === 'metals')     { data._metals = []; }
   if (type === 'given')      { data._given = []; }
-  if (type === 'realestate') { if (data._realEstate) data._realEstate.assets = []; }
+  if (type === 'realestate') { data._realEstate = []; }
   if (type === 'networth')   { data._nwAccounts = []; }
   save();
   renderResetSummary();
