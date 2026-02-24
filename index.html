@@ -5720,6 +5720,46 @@ function addMetalEntry() {
 }
 function deleteMetalEntry(idx) { if(!confirm('Delete this entry?')) return; data._metals.splice(idx,1); save(); renderMetals(); showToast('Entry deleted'); }
 
+// Delete an imported metal entry directly from NW screen
+function deleteImportedMetal(idx) {
+  if (!confirm('Delete this metal entry?')) return;
+  if (!data._metals || !data._metals[idx]) return;
+  data._metals.splice(idx, 1);
+  save(); renderNetWorth(); renderMetals();
+  showToast('✅ Metal entry deleted');
+}
+
+// Open edit sheet for an imported metal entry from NW screen
+function openEditMetalSheet(idx) {
+  const m = (data._metals || [])[idx];
+  if (!m) return;
+  // Navigate to Data screen → Metals section and open edit inline
+  // Simplest approach: open a quick edit modal pre-filled
+  const newType  = prompt('Metal type (gold/silver/platinum):', m.metalType || 'gold');
+  if (newType === null) return;
+  const newPurity  = prompt('Purity (e.g. 22K, 18K):', m.purity || '');
+  if (newPurity === null) return;
+  const newOccasion = prompt('Occasion (e.g. Wedding, Gift):', m.occasion || '');
+  if (newOccasion === null) return;
+  const newItem  = prompt('Item name:', m.itemName || m.name || '');
+  if (newItem === null) return;
+  const newGrams = prompt('Weight in grams:', m.grams || m.weightGms || '');
+  if (newGrams === null) return;
+  const g = parseFloat(newGrams);
+  if (!g || g <= 0) { showToast('Invalid weight ❌'); return; }
+  data._metals[idx] = {
+    ...m,
+    metalType: newType.toLowerCase().trim() || 'gold',
+    purity: newPurity.trim(),
+    occasion: newOccasion.trim(),
+    itemName: newItem.trim(),
+    name: newItem.trim() || newType,
+    grams: g, weightGms: g,
+  };
+  save(); renderNetWorth(); renderMetals();
+  showToast('✅ Metal entry updated');
+}
+
 // ══════════════════════════════════════════════════════
 // INVESTMENTS
 // ══════════════════════════════════════════════════════
@@ -7253,12 +7293,18 @@ function buildNWMetalsBody(accounts, cfg, addBtnLabel) {
           ? (originalName && originalName.toLowerCase() !== mt ? occasion + ' · ' + originalName : occasion)
           : (originalName && originalName.toLowerCase() !== mt ? originalName : acc.name);
         const dateStr = acc.lastUpdated ? new Date(acc.lastUpdated+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'2-digit'}) : '';
-        const editBtn = acc._imported ? '' : `<button class="nw-account-btn" onclick="openNWSheet('metals','${acc.id}')">✏️</button><button class="nw-account-btn del" onclick="deleteNWAccount('${acc.id}')">✕</button>`;
+        // For imported metals — use _metals array index for edit/delete
+        const metalIdx = acc.id.replace('import_metal_','');
+        const editBtn = acc._imported
+          ? `<button class="nw-account-btn" onclick="openEditMetalSheet(${metalIdx})" title="Edit">✏️</button>
+             <button class="nw-account-btn del" onclick="deleteImportedMetal(${metalIdx})" title="Delete">✕</button>`
+          : `<button class="nw-account-btn" onclick="openNWSheet('metals','${acc.id}')">✏️</button>
+             <button class="nw-account-btn del" onclick="deleteNWAccount('${acc.id}')">✕</button>`;
 
         html += `<div class="nw-account-row" style="padding-left:24px;">
           <div class="nw-account-left">
             <div class="nw-account-name" style="font-size:0.87em;">${displayName || '—'}</div>
-            <div class="nw-account-meta">${g.toFixed(2)}g · ${oz} oz${dateStr?' · '+dateStr:''}${acc._imported?' · 📥':''}</div>
+            <div class="nw-account-meta">${g.toFixed(2)}g · ${oz} oz${dateStr?' · '+dateStr:''}</div>
           </div>
           <div class="nw-account-right">
             <div>
