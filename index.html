@@ -5631,34 +5631,9 @@ let pickedBudgetEmoji = '💸';
 
 const BUDGET_EMOJIS = ['💸','🛒','🚗','🏠','💊','🎭','🍔','☕','🎓','🐾','✈️','👗','🎮','🏋️','🎁','📱','⚡','🚌','💈','🎪','🏥','🏦','🔧','🌮','📚','🐟','🌿','💡','🎯','🏡','🥇','💰','📈','🏛️','🎉','🍕','🌺','🌊','🎶','🧘'];
 
-// Default expense budgets matching the excel snapshot
-const DEFAULT_EXPENSE_BUDGETS = [
-  {key:'FastFood',   name:'Fast Food',    icon:'🍔', amount:100, linkedCats:['FastFood']},
-  {key:'Groceries',  name:'Groceries',    icon:'🛒', amount:400, linkedCats:['Groceries']},
-  {key:'Utility',    name:'Utility',      icon:'⚡', amount:500, linkedCats:['Utility','Bills']},
-  {key:'Auto',       name:'Auto',         icon:'🚗', amount:900, linkedCats:['Auto','Gas','Transport']},
-  {key:'Mortgage',   name:'Mortgage',     icon:'🏠', amount:2310, linkedCats:['Mortgage','Rent','Housing']},
-  {key:'Shopping',   name:'Shopping',     icon:'👗', amount:50,  linkedCats:['Shopping']},
-  {key:'Gas',        name:'Gas',          icon:'⛽', amount:100, linkedCats:['Gas','Fuel']},
-  {key:'Insurance',  name:'Insurance',    icon:'🛡️', amount:66.62, linkedCats:['Insurance']},
-  {key:'Toll',       name:'Toll',         icon:'🚌', amount:40,  linkedCats:['Toll']},
-  {key:'Skanda',     name:'Skanda',       icon:'🎓', amount:200, linkedCats:['Skanda','Education','Kids']},
-  {key:'Parents',    name:'Parents',      icon:'👨‍👩‍👦', amount:230, linkedCats:['Parents','Family']},
-  {key:'HealthCare', name:'Health Care',  icon:'💊', amount:100, linkedCats:['HealthCare','Health','Medical']},
-  {key:'Entertainment', name:'Entertainment', icon:'🎭', amount:200, linkedCats:['Entertainment']},
-];
-
-const DEFAULT_SAVINGS_BUDGETS = [
-  {key:'FID',         name:'FID',              icon:'🏦', amount:620, linkedCats:['FID']},
-  {key:'OneGold',     name:'One Gold',          icon:'🥇', amount:400, linkedCats:['OneGold','Gold','Metals']},
-  {key:'OneSilver',   name:'One Silver',        icon:'🥈', amount:500, linkedCats:['OneSilver','Silver']},
-  {key:'OnePlatinum', name:'One Platinum',      icon:'💎', amount:200, linkedCats:['OnePlatinum','Platinum']},
-  {key:'MF',          name:'Mutual Funds',      icon:'📈', amount:600, linkedCats:['MF','ETF/MF','Mutual Fund']},
-  {key:'Stocks',      name:'Stocks',            icon:'📊', amount:700, linkedCats:['Stocks','ETF']},
-  {key:'IND_STOCKS',  name:'IND Stocks',        icon:'🌐', amount:200, linkedCats:['IND STOCKS','IND_STOCKS']},
-  {key:'SAVINGS',     name:'Savings',           icon:'💰', amount:400, linkedCats:['SAVINGS','Savings']},
-  {key:'Crypto',      name:'Crypto',            icon:'🪙', amount:100, linkedCats:['Crypto']},
-];
+// Default budgets — empty for new users, they set up their own
+const DEFAULT_EXPENSE_BUDGETS = [];
+const DEFAULT_SAVINGS_BUDGETS = [];
 
 function getBudgetGoals(type) {
   const key = type === 'savings' ? '_savingsGoals' : '_expenseGoals';
