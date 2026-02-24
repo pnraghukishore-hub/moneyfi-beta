@@ -9066,18 +9066,7 @@ async function firebaseLoad(uid) {
     if (Object.keys(merged).length > 0) {
       // Cloud data exists — merge with local (cloud wins for conflicts)
       data = { ...data, ...merged };
-      // ── Migration: clear stale FX overrides that were set incorrectly ──
-      // If INR override doesn't match current FX_USD_BASE ± 5%, clear it
-      // so the updated base rate (86.5) takes effect cleanly
-      if (data._fxOverrides && data._fxOverrides['INR']) {
-        const storedRate = data._fxOverrides['INR'];
-        const baseRate   = FX_USD_BASE['INR'];
-        const pctDiff    = Math.abs(storedRate - baseRate) / baseRate;
-        if (pctDiff > 0.05) {  // more than 5% off — likely a bad override
-          console.log(`[Migration] Clearing stale INR override ${storedRate} (base is ${baseRate})`);
-          delete data._fxOverrides['INR'];
-        }
-      }
+      // Migration note: stale INR override cleanup removed — user overrides are intentional
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
       showSyncStatus('✅ Data loaded from cloud', '#10B981', 2500);
     } else {
