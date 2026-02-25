@@ -1958,7 +1958,9 @@
   </div>
 
   <!-- OVERVIEW TAB -->
-  <div id="bsec-overview" class="budget-section">
+  <div id="bsec-overview" class="budget-section"
+    ontouchstart="budgetSwipeStart(event)"
+    ontouchend="budgetSwipeEnd(event)">
     <!-- Hero card: Total left + dual line chart -->
     <div class="budget-hero-card" id="bh-card">
       <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:2px;">
@@ -2001,7 +2003,9 @@
   <!-- EXPENSES GOALS TAB -->
   <div id="bsec-expenses" class="budget-section" style="display:none;">
     <!-- Category detail view (shown when a category is clicked) -->
-    <div class="bcat-detail-view" id="bcat-detail-expenses">
+    <div class="bcat-detail-view" id="bcat-detail-expenses"
+      ontouchstart="budgetSwipeStart(event)"
+      ontouchend="budgetSwipeEnd(event)">
       <button class="bcd-back-btn" onclick="closeBudgetCatDetail('expenses')">← Back</button>
       <div class="bcd-header">
         <div class="bcd-icon" id="bcd-exp-icon"></div>
@@ -2041,7 +2045,9 @@
 
   <!-- SAVINGS GOALS TAB -->
   <div id="bsec-savings" class="budget-section" style="display:none;">
-    <div class="bcat-detail-view" id="bcat-detail-savings">
+    <div class="bcat-detail-view" id="bcat-detail-savings"
+      ontouchstart="budgetSwipeStart(event)"
+      ontouchend="budgetSwipeEnd(event)">
       <button class="bcd-back-btn" onclick="closeBudgetCatDetail('savings')">← Back</button>
       <div class="bcd-header">
         <div class="bcd-icon" id="bcd-sav-icon"></div>
@@ -7053,6 +7059,23 @@ function renderGoalsPanel() {
       ${(g.mappedAccounts||[]).length > 0 ? `<div style="font-size:0.7em;font-weight:600;color:var(--text-light);margin-top:5px;border-top:1px solid #F5F5F5;padding-top:5px;">📊 ${g.mappedAccounts.length} account${g.mappedAccounts.length>1?'s':''} mapped</div>` : ''}
     </div>`;
   }).join('');
+}
+
+// ── Budget swipe gesture ────────────────────────────────────────
+let _budgetSwipeX = null;
+
+function budgetSwipeStart(e) {
+  _budgetSwipeX = e.touches ? e.touches[0].clientX : null;
+}
+
+function budgetSwipeEnd(e) {
+  if (_budgetSwipeX === null) return;
+  const endX = e.changedTouches ? e.changedTouches[0].clientX : null;
+  if (endX === null) { _budgetSwipeX = null; return; }
+  const delta = endX - _budgetSwipeX;
+  _budgetSwipeX = null;
+  if (Math.abs(delta) < 50) return;
+  budgetChangeMonth(delta < 0 ? 1 : -1);
 }
 
 function budgetChangeMonth(dir) {
