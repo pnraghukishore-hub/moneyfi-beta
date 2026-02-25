@@ -245,12 +245,6 @@
     .cal-sum-item.net .cal-sum-val { color:var(--text-dark); }
     .cal-sum-divider { width:1px; height:32px; background:#F0F0F0; }
     .cal-grid-wrap { background:var(--white); border-radius:var(--radius); box-shadow:var(--card-shadow); overflow:hidden; margin-bottom:14px; }
-    .cal-month-strip { display:flex; gap:6px; overflow-x:auto; padding:8px 2px 10px; scrollbar-width:none; -webkit-overflow-scrolling:touch; margin-bottom:4px; }
-    .cal-month-strip::-webkit-scrollbar { display:none; }
-    .cal-month-pill { flex-shrink:0; padding:6px 14px; border-radius:20px; font-size:0.78em; font-weight:800; cursor:pointer; border:none; font-family:Nunito,sans-serif; background:#F0F0F0; color:var(--text-med); transition:all 0.15s; }
-    .cal-month-pill.active { background:var(--primary); color:white; }
-    .cal-month-pill.has-data { background:#F0F4FF; color:#1E2A6E; }
-    .cal-month-pill.active.has-data { background:var(--primary); color:white; }
     .cal-dow-row { display:grid; grid-template-columns:repeat(7,1fr); padding:10px 0 8px; border-bottom:1px solid #F5F5F5; }
     .cal-dow { text-align:center; font-size:0.7em; font-weight:900; color:var(--text-light); letter-spacing:0.3px; }
     .cal-grid { display:grid; grid-template-columns:repeat(7,1fr); }
@@ -1430,9 +1424,6 @@
       <div class="cal-sum-val" id="cal-total-net">$0</div>
     </div>
   </div>
-  <!-- Month strip — quick jump between months -->
-  <div class="cal-month-strip" id="cal-month-strip"></div>
-
   <!-- Search Bar -->
   <div style="position:relative;margin-bottom:10px;">
     <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:1em;pointer-events:none;">🔍</span>
@@ -4892,8 +4883,6 @@ function renderTransactions() {
   const today = new Date().toISOString().split('T')[0];
   const [y, mo] = viewMonth.split('-').map(Number);
 
-  renderMonthStrip();
-
   const titleEl = document.getElementById('cal-month-title');
   if(titleEl) titleEl.textContent = getDisplayMonth(viewMonth);
 
@@ -4976,55 +4965,6 @@ function renderTransactions() {
   const calGrid = document.getElementById('cal-grid');
   if(calGrid) calGrid.innerHTML = cells;
   renderCalDayDetail(allTx);
-}
-
-// ── Month Strip Renderer ────────────────────────────────────────
-function renderMonthStrip() {
-  const strip = document.getElementById('cal-month-strip');
-  if (!strip) return;
-
-  // Get all months that have data, plus current month
-  const dataMonths = Object.keys(data).filter(k => /^\d{4}-\d{2}$/.test(k)).sort();
-  const currentMk = getCurrentMonthKey();
-  if (!dataMonths.includes(currentMk)) dataMonths.push(currentMk);
-  dataMonths.sort();
-
-  // Show last 12 months max, always include current
-  const now = new Date();
-  const months = [];
-  for (let i = 11; i >= -2; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const mk = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-    months.push(mk);
-  }
-  // Add any data months not in range
-  dataMonths.forEach(mk => { if (!months.includes(mk)) months.push(mk); });
-  months.sort();
-
-  strip.innerHTML = months.map(mk => {
-    const hasData = dataMonths.includes(mk) && data[mk] &&
-      ((data[mk].expenses||[]).length + (data[mk].income||[]).length + (data[mk].investments||[]).length) > 0;
-    const isActive = mk === viewMonth;
-    const [y, m] = mk.split('-').map(Number);
-    const label = new Date(y, m-1, 1).toLocaleDateString('en-US', {month:'short', year:'2-digit'});
-    return `<button class="cal-month-pill ${isActive?'active':''} ${hasData&&!isActive?'has-data':''}"
-      onclick="jumpToMonth('${mk}')">${label}</button>`;
-  }).join('');
-
-  // Scroll active pill into view
-  setTimeout(() => {
-    const active = strip.querySelector('.cal-month-pill.active');
-    if (active) active.scrollIntoView({ behavior:'smooth', block:'nearest', inline:'center' });
-  }, 50);
-}
-
-function jumpToMonth(mk) {
-  viewMonth = mk;
-  calSelectedDay = null;
-  const topbarMonth = document.getElementById('topbar-month');
-  if (topbarMonth) topbarMonth.textContent = getDisplayMonth(viewMonth);
-  renderTransactions();
-  renderHome();
 }
 
 // ── Long Press for Recurring ─────────────────────────────────────
