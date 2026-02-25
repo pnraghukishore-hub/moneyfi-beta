@@ -245,6 +245,11 @@
     .cal-sum-item.net .cal-sum-val { color:var(--text-dark); }
     .cal-sum-divider { width:1px; height:32px; background:#F0F0F0; }
     .cal-grid-wrap { background:var(--white); border-radius:var(--radius); box-shadow:var(--card-shadow); overflow:hidden; margin-bottom:14px; }
+    .settings-accordion { background:white; border-radius:16px; box-shadow:0 1px 6px rgba(0,0,0,0.06); margin-bottom:10px; overflow:hidden; }
+    .acc-header { display:flex; align-items:center; justify-content:space-between; padding:14px 16px; cursor:pointer; font-size:0.82em; font-weight:900; color:var(--text-dark); user-select:none; }
+    .acc-header:hover { background:#FAFAFA; }
+    .acc-chev { font-size:1em; font-weight:900; color:var(--text-light); transition:transform 0.2s; flex-shrink:0; }
+    .acc-body { padding:0 16px 16px; }
     .cal-dow-row { display:grid; grid-template-columns:repeat(7,1fr); padding:10px 0 8px; border-bottom:1px solid #F5F5F5; }
     .cal-dow { text-align:center; font-size:0.7em; font-weight:900; color:var(--text-light); letter-spacing:0.3px; }
     .cal-grid { display:grid; grid-template-columns:repeat(7,1fr); }
@@ -1676,217 +1681,234 @@
 
 <!-- ══════════════ SETTINGS ══════════════ -->
 <div class="screen" id="screen-settings">
-  <!-- ═══ Recurring Transactions ═══ -->
+
+  <!-- ═══ Cloud Sync — Always visible, no toggle ═══ -->
   <div style="background:white;border-radius:16px;padding:16px;margin-bottom:14px;box-shadow:0 1px 6px rgba(0,0,0,0.06);">
-    <div style="font-size:0.7em;font-weight:800;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px;">🔁 Recurring Transactions</div>
-    <div id="recurring-rules-list"></div>
+    <div style="font-size:0.7em;font-weight:800;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px;">☁️ Cloud Sync Account</div>
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+      <img id="firebase-user-avatar" src="" style="display:none;width:40px;height:40px;border-radius:50%;border:2px solid #E8E8E8;">
+      <div>
+        <div id="firebase-user-display" style="font-weight:800;font-size:0.9em;color:#1E2A6E;">Loading...</div>
+        <div style="font-size:0.72em;color:#10B981;font-weight:700;">✅ Synced across devices</div>
+      </div>
+    </div>
+    <button onclick="signOut()" style="width:100%;padding:10px;background:#FFF0F0;border:1.5px solid #FFCDD2;border-radius:10px;color:#EF4444;font-weight:800;font-size:0.82em;cursor:pointer;">
+      Sign Out
+    </button>
   </div>
 
-  <!-- Data Management (moved from Home) -->
-  
-    <!-- ═══ Firebase Account ═══ -->
-    <div style="background:white;border-radius:16px;padding:16px;margin-bottom:14px;box-shadow:0 1px 6px rgba(0,0,0,0.06);">
-      <div style="font-size:0.7em;font-weight:800;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px;">☁️ Cloud Sync Account</div>
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
-        <img id="firebase-user-avatar" src="" style="display:none;width:40px;height:40px;border-radius:50%;border:2px solid #E8E8E8;">
+  <!-- ═══ Recurring Transactions — Open by default ═══ -->
+  <div class="settings-accordion" id="acc-recurring">
+    <div class="acc-header" onclick="toggleAccordion('acc-recurring')">
+      <span>🔁 Recurring Transactions</span>
+      <span class="acc-chev">▾</span>
+    </div>
+    <div class="acc-body">
+      <div id="recurring-rules-list"></div>
+    </div>
+  </div>
+
+  <!-- ═══ Currency & FX — Collapsible, closed ═══ -->
+  <div class="settings-accordion collapsed" id="acc-currency">
+    <div class="acc-header" onclick="toggleAccordion('acc-currency')">
+      <span>💱 Currency & Exchange Rates</span>
+      <span class="acc-chev">▸</span>
+    </div>
+    <div class="acc-body" style="display:none;">
+      <p style="font-size:0.82em;color:var(--text-light);font-weight:600;margin-bottom:12px;">All amounts display in your chosen currency symbol.</p>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
         <div>
-          <div id="firebase-user-display" style="font-weight:800;font-size:0.9em;color:#1E2A6E;">Loading...</div>
-          <div style="font-size:0.72em;color:#10B981;font-weight:700;">✅ Synced across devices</div>
+          <div style="font-weight:900;font-size:1.1em;" id="settings-curr-display">🇺🇸 USD — $</div>
+          <div style="font-size:0.78em;color:var(--text-light);margin-top:2px;" id="settings-curr-name">US Dollar</div>
+        </div>
+        <button onclick="openCurrencyPicker('settings')" style="background:var(--yellow);border:none;border-radius:10px;padding:10px 18px;font-family:Nunito,sans-serif;font-weight:900;font-size:0.88em;cursor:pointer;">Change</button>
+      </div>
+      <div style="border-top:1px solid #F0F0F0;padding-top:14px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <span style="font-size:0.78em;font-weight:800;color:var(--text-med);">FX OVERRIDE RATES <span id="fx-override-badge" style="display:none;background:#F0FFF4;color:#10B981;font-size:0.65em;border-radius:8px;padding:2px 8px;font-weight:800;margin-left:6px;">✏️ Custom</span></span>
+          <button onclick="clearAllFXOverrides()" id="fx-clear-all-btn" style="display:none;background:#FFF0F0;border:1.5px solid #EF444430;border-radius:8px;padding:4px 10px;font-size:0.72em;font-weight:800;color:#EF4444;cursor:pointer;">🗑 Clear All</button>
+        </div>
+        <p style="font-size:0.78em;color:var(--text-light);font-weight:600;margin-bottom:10px;">Override any rate if the built-in estimate is off. Only currencies in your data appear here.</p>
+        <div id="fx-rates-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Home Spending Cards — Open by default ═══ -->
+  <div class="settings-accordion" id="acc-homecards">
+    <div class="acc-header" onclick="toggleAccordion('acc-homecards')">
+      <span>🏠 Home Spending Cards</span>
+      <span class="acc-chev">▾</span>
+    </div>
+    <div class="acc-body">
+      <p style="font-size:0.82em;color:var(--text-light);font-weight:600;margin-bottom:12px;">Choose which category cards appear on your home screen. Toggle ✓ to show/hide, ✕ to permanently remove.</p>
+      <div class="home-card-grid" id="home-card-grid"></div>
+      <div style="margin-top:10px;">
+        <div style="font-size:0.78em;font-weight:800;color:var(--text-med);margin-bottom:8px;">ADD CUSTOM CARD</div>
+        <div class="home-card-emoji-pick" id="home-card-emoji-row"></div>
+        <div class="home-card-add-row">
+          <input type="text" class="cat-add-input" id="home-card-name-input" placeholder="Card name (e.g. Groceries)">
+          <button class="cat-add-btn" onclick="addHomeCard()">+ Add</button>
         </div>
       </div>
-      <button onclick="signOut()" style="width:100%;padding:10px;background:#FFF0F0;border:1.5px solid #FFCDD2;border-radius:10px;color:#EF4444;font-weight:800;font-size:0.82em;cursor:pointer;">
-        Sign Out
-      </button>
     </div>
-    <!-- ══════════════════════ -->
-<div class="settings-card">
-    <div class="settings-title">💾 Data Management</div>
-    <div class="form-row">
-      <span class="form-icon">💾</span><span class="form-label">Backup</span>
-      <button onclick="downloadBackup()" style="background:var(--yellow-light);border:none;border-radius:8px;padding:8px 14px;font-family:Nunito;font-weight:800;font-size:0.82em;cursor:pointer;color:var(--text-dark);">⬇️ Download</button>
+  </div>
+
+  <!-- ═══ Home Investment Cards — Closed by default ═══ -->
+  <div class="settings-accordion collapsed" id="acc-invcards">
+    <div class="acc-header" onclick="toggleAccordion('acc-invcards')">
+      <span>📈 Home Investment Cards</span>
+      <span class="acc-chev">▸</span>
     </div>
-    <div class="form-row">
-      <span class="form-icon">📊</span><span class="form-label">Export</span>
-      <button onclick="exportAllData()" style="background:var(--yellow-light);border:none;border-radius:8px;padding:8px 14px;font-family:Nunito;font-weight:800;font-size:0.82em;cursor:pointer;color:var(--text-dark);">Export Excel</button>
-    </div>
-    <div class="form-row" style="border-bottom:none;">
-      <span class="form-icon">📥</span><span class="form-label">Restore</span>
-      <label for="restore-settings-file" style="background:var(--yellow-light);border:none;border-radius:8px;padding:8px 14px;font-family:Nunito;font-weight:800;font-size:0.82em;cursor:pointer;color:var(--text-dark);">⬆️ Upload</label>
-      <input type="file" id="restore-settings-file" accept=".json" style="display:none;" onchange="restoreBackup(this)">
-    </div>
-    <div class="form-row" style="border-bottom:none;margin-top:4px;">
-      <span class="form-icon">🎬</span><span class="form-label">Intro Tour</span>
-      <div style="display:flex;gap:6px;">
-        <button onclick="showOnboarding()" style="background:var(--yellow-light);border:none;border-radius:8px;padding:8px 12px;font-family:Nunito;font-weight:800;font-size:0.82em;cursor:pointer;color:var(--text-dark);">▶ Slides</button>
-        <button onclick="startCoachTour()" style="background:var(--primary-light);border:none;border-radius:8px;padding:8px 12px;font-family:Nunito;font-weight:800;font-size:0.82em;cursor:pointer;color:var(--primary);">🎯 Coach</button>
+    <div class="acc-body" style="display:none;">
+      <p style="font-size:0.82em;color:var(--text-light);font-weight:600;margin-bottom:12px;">Choose which investment cards appear on the Investing tab. Toggle ✓ to show/hide, ✕ to remove.</p>
+      <div class="home-card-grid" id="inv-card-grid"></div>
+      <div style="margin-top:10px;">
+        <div style="font-size:0.78em;font-weight:800;color:var(--text-med);margin-bottom:8px;">ADD CUSTOM INVESTMENT CARD</div>
+        <div style="font-size:0.75em;color:var(--text-light);font-weight:600;margin-bottom:8px;">Pick an emoji, name your card, choose how it tracks</div>
+        <div class="home-card-emoji-pick" id="inv-card-emoji-row"></div>
+        <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
+          <input type="text" class="cat-add-input" id="inv-card-name-input" placeholder="Card name (e.g. PF/VPF, NPS, FD)" style="flex:2;min-width:140px;">
+          <select id="inv-card-template" class="cat-add-input" style="flex:1;min-width:110px;">
+            <option value="General">💰 Contribution</option>
+            <option value="ETF/MF">📊 Units × NAV</option>
+            <option value="Stocks">📈 Shares × Price</option>
+            <option value="Crypto">🪙 Coins × Price</option>
+            <option value="Metals">🥇 Weight × Cost</option>
+            <option value="Real Estate">🏡 Property</option>
+          </select>
+        </div>
+        <button class="cat-add-btn" style="width:100%;" onclick="addInvCard()">+ Add Investment Card</button>
       </div>
     </div>
   </div>
 
-  <!-- PIN Lock — COMMENTED OUT, RE-ENABLE LATER -->
-  <!-- 
-  === PIN LOCK SETTINGS UI — Uncomment to re-enable ===
-  <div class="settings-card">
-    <div class="settings-title">🔒 App Lock</div>
-    <div class="form-row">
-      <span class="form-icon">🔑</span>
-      <div style="flex:1;">
-        <div style="font-weight:800;font-size:0.9em;color:var(--text-dark);">PIN Lock</div>
-        <div style="font-size:0.76em;color:var(--text-light);font-weight:600;margin-top:2px;" id="pin-status-label">Not set up</div>
-      </div>
-      <div style="display:flex;gap:8px;align-items:center;">
-        <button id="pin-toggle-btn" onclick="handlePinToggle()">Set PIN</button>
-        <button id="pin-change-btn" onclick="showChangePIN()" style="display:none;">Change</button>
-      </div>
+  <!-- ═══ Manage Categories — Closed by default ═══ -->
+  <div class="settings-accordion collapsed" id="acc-categories">
+    <div class="acc-header" onclick="toggleAccordion('acc-categories')">
+      <span>🏷️ Manage Categories</span>
+      <span class="acc-chev">▸</span>
     </div>
-  </div>
-  === END PIN LOCK SETTINGS === -->
-
-  <!-- Currency -->
-  <div class="settings-card">
-    <div class="settings-title">💱 Currency</div>
-    <p style="font-size:0.82em;color:var(--text-light);font-weight:600;margin-bottom:12px;">All amounts display in your chosen currency symbol.</p>
-    <div style="display:flex;align-items:center;justify-content:space-between;">
-      <div>
-        <div style="font-weight:900;font-size:1.1em;" id="settings-curr-display">🇺🇸 USD — $</div>
-        <div style="font-size:0.78em;color:var(--text-light);margin-top:2px;" id="settings-curr-name">US Dollar</div>
+    <div class="acc-body" style="display:none;">
+      <p style="font-size:0.82em;color:var(--text-light);font-weight:600;margin-bottom:12px;">Customize subcategories used in Quick Add. Tap ✕ to remove, or add your own below.</p>
+      <div class="cat-mgr-tabs" id="cat-mgr-tabs">
+        <button class="cat-mgr-tab active" onclick="showCatMgrTab('expense',this)">💸 Expense</button>
+        <button class="cat-mgr-tab" onclick="showCatMgrTab('income',this)">💵 Income</button>
+        <button class="cat-mgr-tab" onclick="showCatMgrTab('investment',this)">📈 Invest</button>
+        <button class="cat-mgr-tab" onclick="showCatMgrTab('debt',this)">📉 Debt</button>
+        <button class="cat-mgr-tab" onclick="showCatMgrTab('given',this)">🤝 Given</button>
+        <button class="cat-mgr-tab" onclick="showCatMgrTab('additional',this)">🎁 Additional</button>
       </div>
-      <button onclick="openCurrencyPicker('settings')" style="background:var(--yellow);border:none;border-radius:10px;padding:10px 18px;font-family:Nunito,sans-serif;font-weight:900;font-size:0.88em;cursor:pointer;">Change</button>
-    </div>
-  </div>
-
-  <!-- FX Exchange Rates -->
-  <div class="settings-card">
-    <div class="settings-title" style="display:flex;align-items:center;justify-content:space-between;">
-    <span>💱 Exchange Rates <span id="fx-override-badge" style="display:none;background:#F0FFF4;color:#10B981;font-size:0.65em;border-radius:8px;padding:2px 8px;font-weight:800;margin-left:6px;vertical-align:middle;">✏️ Custom</span></span>
-    <button onclick="clearAllFXOverrides()" id="fx-clear-all-btn" style="display:none;background:#FFF0F0;border:1.5px solid #EF444430;border-radius:8px;padding:4px 10px;font-size:0.72em;font-weight:800;color:#EF4444;cursor:pointer;">🗑 Clear All Overrides</button>
-  </div>
-    <p style="font-size:0.82em;color:var(--text-light);font-weight:600;margin-bottom:12px;">Rates used to convert your multi-currency assets &amp; transactions to <span id="fx-base-label">USD</span>. Override any rate if the built-in estimate is off.</p>
-    <div id="fx-rates-list"></div>
-    <div style="margin-top:10px;font-size:0.72em;color:var(--text-light);font-weight:600;">
-      💡 Rates shown as: 1 USD = N units. Only currencies found in your data appear here.
-    </div>
-  </div>
-
-  <!-- Home Spending Cards Manager -->
-  <div class="settings-card">
-    <div class="settings-title">🏠 Home Spending Cards</div>
-    <p style="font-size:0.82em;color:var(--text-light);font-weight:600;margin-bottom:12px;">Choose which category cards appear on your home screen. Toggle ✓ to show/hide, ✕ to permanently remove.</p>
-    <div class="home-card-grid" id="home-card-grid"></div>
-    <div style="margin-top:10px;">
-      <div style="font-size:0.78em;font-weight:800;color:var(--text-med);margin-bottom:8px;">ADD CUSTOM CARD</div>
-      <div class="home-card-emoji-pick" id="home-card-emoji-row"></div>
-      <div class="home-card-add-row">
-        <input type="text" class="cat-add-input" id="home-card-name-input" placeholder="Card name (e.g. Groceries)">
-        <button class="cat-add-btn" onclick="addHomeCard()">+ Add</button>
+      <div class="cat-pills-wrap" id="cat-pills-wrap"></div>
+      <div class="cat-add-row">
+        <input type="text" class="cat-add-input" id="cat-add-input" placeholder="New category name..." onkeydown="if(event.key==='Enter')addCustomCat()">
+        <button class="cat-add-btn" onclick="addCustomCat()">+ Add</button>
       </div>
     </div>
   </div>
 
-  <!-- Investment Cards Manager -->
-  <div class="settings-card">
-    <div class="settings-title">📈 Home Investment Cards</div>
-    <p style="font-size:0.82em;color:var(--text-light);font-weight:600;margin-bottom:12px;">Choose which investment cards appear on the Investing tab. Toggle ✓ to show/hide, ✕ to remove. Add custom cards like PF, NPS, FD, etc.</p>
-    <div class="home-card-grid" id="inv-card-grid"></div>
-    <div style="margin-top:10px;">
-      <div style="font-size:0.78em;font-weight:800;color:var(--text-med);margin-bottom:8px;">ADD CUSTOM INVESTMENT CARD</div>
-      <div style="font-size:0.75em;color:var(--text-light);font-weight:600;margin-bottom:8px;">Pick an emoji, name your card, choose how it tracks (contributions like PF/VPF/FD, or units like ETF)</div>
-      <div class="home-card-emoji-pick" id="inv-card-emoji-row"></div>
-      <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
-        <input type="text" class="cat-add-input" id="inv-card-name-input" placeholder="Card name (e.g. PF/VPF, NPS, FD)" style="flex:2;min-width:140px;">
-        <select id="inv-card-template" class="cat-add-input" style="flex:1;min-width:110px;">
-          <option value="General">💰 Contribution</option>
-          <option value="ETF/MF">📊 Units × NAV</option>
-          <option value="Stocks">📈 Shares × Price</option>
-          <option value="Crypto">🪙 Coins × Price</option>
-          <option value="Metals">🥇 Weight × Cost</option>
-          <option value="Real Estate">🏡 Property</option>
-        </select>
-      </div>
-      <button class="cat-add-btn" style="width:100%;" onclick="addInvCard()">+ Add Investment Card</button>
+  <!-- ═══ Net Worth Account Types — Closed by default ═══ -->
+  <div class="settings-accordion collapsed" id="acc-nwtypes">
+    <div class="acc-header" onclick="toggleAccordion('acc-nwtypes')">
+      <span>💎 Net Worth Account Types</span>
+      <span class="acc-chev">▸</span>
     </div>
-  </div>
-
-  <!-- Category Manager -->
-  <div class="settings-card">
-    <div class="settings-title">🏷️ Manage Categories</div>
-    <p style="font-size:0.82em;color:var(--text-light);font-weight:600;margin-bottom:12px;">Customize subcategories used in Quick Add. Tap ✕ to remove, or add your own below.</p>
-    <div class="cat-mgr-tabs" id="cat-mgr-tabs">
-      <button class="cat-mgr-tab active" onclick="showCatMgrTab('expense',this)">💸 Expense</button>
-      <button class="cat-mgr-tab" onclick="showCatMgrTab('income',this)">💵 Income</button>
-      <button class="cat-mgr-tab" onclick="showCatMgrTab('investment',this)">📈 Invest</button>
-      <button class="cat-mgr-tab" onclick="showCatMgrTab('debt',this)">📉 Debt</button>
-      <button class="cat-mgr-tab" onclick="showCatMgrTab('given',this)">🤝 Given</button>
-      <button class="cat-mgr-tab" onclick="showCatMgrTab('additional',this)">🎁 Additional</button>
-    </div>
-    <div class="cat-pills-wrap" id="cat-pills-wrap"></div>
-    <div class="cat-add-row">
-      <input type="text" class="cat-add-input" id="cat-add-input" placeholder="New category name..." onkeydown="if(event.key==='Enter')addCustomCat()">
-      <button class="cat-add-btn" onclick="addCustomCat()">+ Add</button>
-    </div>
-  </div>
-
-  <!-- Net Worth Account Types -->
-  <div class="settings-card" id="settings-nw-card">
-    <div class="settings-title">💎 Net Worth Account Types</div>
-    <p style="font-size:0.82em;color:var(--text-light);font-weight:600;margin-bottom:12px;">Choose which types appear in the Add Account picker. Toggle ✓ to show/hide, ✕ to remove custom types.</p>
-    <div class="home-card-grid" id="nw-type-visibility-grid"></div>
-    <div style="margin-top:12px;border-top:1px solid #F0F0F0;padding-top:12px;">
-      <div style="font-size:0.78em;font-weight:800;color:var(--text-med);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;">Add Custom Type</div>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-        <div id="nw-type-emoji-row" style="display:flex;gap:4px;flex-wrap:wrap;"></div>
-      </div>
-      <div style="display:flex;gap:8px;margin-top:8px;">
-        <input type="text" id="nw-type-name-input" class="cat-add-input" placeholder="e.g. Auto Loan, Other Asset" style="flex:1;">
-        <label style="display:flex;align-items:center;gap:4px;font-size:0.8em;font-weight:700;cursor:pointer;">
-          <input type="checkbox" id="nw-type-is-liab"> Liability
-        </label>
-        <button class="cat-add-btn" onclick="addCustomNWType()">+ Add</button>
+    <div class="acc-body" style="display:none;">
+      <p style="font-size:0.82em;color:var(--text-light);font-weight:600;margin-bottom:12px;">Choose which types appear in the Add Account picker. Toggle ✓ to show/hide, ✕ to remove custom types.</p>
+      <div class="home-card-grid" id="nw-type-visibility-grid"></div>
+      <div style="margin-top:12px;border-top:1px solid #F0F0F0;padding-top:12px;">
+        <div style="font-size:0.78em;font-weight:800;color:var(--text-med);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;">Add Custom Type</div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <div id="nw-type-emoji-row" style="display:flex;gap:4px;flex-wrap:wrap;"></div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:8px;">
+          <input type="text" id="nw-type-name-input" class="cat-add-input" placeholder="e.g. Auto Loan, Other Asset" style="flex:1;">
+          <label style="display:flex;align-items:center;gap:4px;font-size:0.8em;font-weight:700;cursor:pointer;">
+            <input type="checkbox" id="nw-type-is-liab"> Liability
+          </label>
+          <button class="cat-add-btn" onclick="addCustomNWType()">+ Add</button>
+        </div>
       </div>
     </div>
   </div>
 
-  <!-- Theme Selector -->
-  <div class="settings-card">
-    <div class="settings-title">🎨 App Theme</div>
-    <p style="font-size:0.82em;color:var(--text-light);font-weight:600;margin-bottom:14px;">Pick a vibe! Each theme adds fun decorations and colors.</p>
-    <div class="theme-grid">
-      <div class="theme-card default active-theme" id="theme-default" onclick="setTheme('default')">
-        <div class="tc-preview">☀️💰</div>
-        <div class="tc-name">Classic MoneyFlow</div>
-        <div class="tc-desc">The original warm & sunny look</div>
-        <div class="tc-active-badge">✓</div>
-      </div>
-      <div class="theme-card looney" id="theme-looney" onclick="setTheme('looney')">
-        <div class="tc-preview">🐰🦆😜</div>
-        <div class="tc-name">Looney Tunes!</div>
-        <div class="tc-desc">Wabbit season for your wallet</div>
-        <div class="tc-active-badge">✓</div>
-      </div>
-      <div class="theme-card jungle" id="theme-jungle" onclick="setTheme('jungle')">
-        <div class="tc-preview">🐒🌿🦜</div>
-        <div class="tc-name">Jungle Vibes</div>
-        <div class="tc-desc">Go bananas with your budget!</div>
-        <div class="tc-active-badge">✓</div>
-      </div>
-      <div class="theme-card space" id="theme-space" onclick="setTheme('space')">
-        <div class="tc-preview">🚀⭐🌙</div>
-        <div class="tc-name">Space Explorer</div>
-        <div class="tc-desc">Finance at warp speed</div>
-        <div class="tc-active-badge">✓</div>
-      </div>
-      <div class="theme-card ocean" id="theme-ocean" onclick="setTheme('ocean')">
-        <div class="tc-preview">🐠🌊🐚</div>
-        <div class="tc-name">Deep Ocean</div>
-        <div class="tc-desc">Dive deep into your finances</div>
-        <div class="tc-active-badge">✓</div>
+  <!-- ═══ App Theme — Open by default ═══ -->
+  <div class="settings-accordion" id="acc-theme">
+    <div class="acc-header" onclick="toggleAccordion('acc-theme')">
+      <span>🎨 App Theme</span>
+      <span class="acc-chev">▾</span>
+    </div>
+    <div class="acc-body">
+      <p style="font-size:0.82em;color:var(--text-light);font-weight:600;margin-bottom:14px;">Pick a vibe! Each theme adds fun decorations and colors.</p>
+      <div class="theme-grid">
+        <div class="theme-card default active-theme" id="theme-default" onclick="setTheme('default')">
+          <div class="tc-preview">☀️💰</div>
+          <div class="tc-name">Classic MoneyFlow</div>
+          <div class="tc-desc">The original warm & sunny look</div>
+          <div class="tc-active-badge">✓</div>
+        </div>
+        <div class="theme-card looney" id="theme-looney" onclick="setTheme('looney')">
+          <div class="tc-preview">🐰🦆😜</div>
+          <div class="tc-name">Looney Tunes!</div>
+          <div class="tc-desc">Wabbit season for your wallet</div>
+          <div class="tc-active-badge">✓</div>
+        </div>
+        <div class="theme-card jungle" id="theme-jungle" onclick="setTheme('jungle')">
+          <div class="tc-preview">🐒🌿🦜</div>
+          <div class="tc-name">Jungle Vibes</div>
+          <div class="tc-desc">Go bananas with your budget!</div>
+          <div class="tc-active-badge">✓</div>
+        </div>
+        <div class="theme-card space" id="theme-space" onclick="setTheme('space')">
+          <div class="tc-preview">🚀⭐🌙</div>
+          <div class="tc-name">Space Explorer</div>
+          <div class="tc-desc">Finance at warp speed</div>
+          <div class="tc-active-badge">✓</div>
+        </div>
+        <div class="theme-card ocean" id="theme-ocean" onclick="setTheme('ocean')">
+          <div class="tc-preview">🐠🌊🐚</div>
+          <div class="tc-name">Deep Ocean</div>
+          <div class="tc-desc">Dive deep into your finances</div>
+          <div class="tc-active-badge">✓</div>
+        </div>
       </div>
     </div>
   </div>
 
+  <!-- ═══ Data Management — Closed by default ═══ -->
+  <div class="settings-accordion collapsed" id="acc-data">
+    <div class="acc-header" onclick="toggleAccordion('acc-data')" style="color:#EF4444;">
+      <span>🗑 Data Management</span>
+      <span class="acc-chev">▸</span>
+    </div>
+    <div class="acc-body" style="display:none;">
+      <div class="settings-card" style="box-shadow:none;padding:0;margin-bottom:0;">
+        <div class="form-row">
+          <span class="form-icon">💾</span><span class="form-label">Backup</span>
+          <button onclick="downloadBackup()" style="background:var(--yellow-light);border:none;border-radius:8px;padding:8px 14px;font-family:Nunito;font-weight:800;font-size:0.82em;cursor:pointer;color:var(--text-dark);">⬇️ Download</button>
+        </div>
+        <div class="form-row">
+          <span class="form-icon">📊</span><span class="form-label">Export</span>
+          <button onclick="exportAllData()" style="background:var(--yellow-light);border:none;border-radius:8px;padding:8px 14px;font-family:Nunito;font-weight:800;font-size:0.82em;cursor:pointer;color:var(--text-dark);">Export Excel</button>
+        </div>
+        <div class="form-row" style="border-bottom:none;">
+          <span class="form-icon">📥</span><span class="form-label">Restore</span>
+          <label for="restore-settings-file" style="background:var(--yellow-light);border:none;border-radius:8px;padding:8px 14px;font-family:Nunito;font-weight:800;font-size:0.82em;cursor:pointer;color:var(--text-dark);">⬆️ Upload</label>
+          <input type="file" id="restore-settings-file" accept=".json" style="display:none;" onchange="restoreBackup(this)">
+        </div>
+        <div class="form-row" style="border-bottom:none;margin-top:4px;">
+          <span class="form-icon">🎬</span><span class="form-label">Intro Tour</span>
+          <div style="display:flex;gap:6px;">
+            <button onclick="showOnboarding()" style="background:var(--yellow-light);border:none;border-radius:8px;padding:8px 12px;font-family:Nunito;font-weight:800;font-size:0.82em;cursor:pointer;color:var(--text-dark);">▶ Slides</button>
+            <button onclick="startCoachTour()" style="background:var(--primary-light);border:none;border-radius:8px;padding:8px 12px;font-family:Nunito;font-weight:800;font-size:0.82em;cursor:pointer;color:var(--primary);">🎯 Coach</button>
+          </div>
+        </div>
+      </div>
+      <div id="reset-data-summary" style="margin-top:12px;"></div>
+    </div>
+  </div>
 
 </div>
-
 <!-- FAB BACKDROP -->
 <div class="fab-backdrop" id="fab-backdrop" onclick="closeFabMenu()"></div>
 
@@ -4965,6 +4987,24 @@ function renderTransactions() {
   const calGrid = document.getElementById('cal-grid');
   if(calGrid) calGrid.innerHTML = cells;
   renderCalDayDetail(allTx);
+}
+
+// ── Settings Accordion ──────────────────────────────────────────
+function toggleAccordion(id) {
+  const acc = document.getElementById(id);
+  if (!acc) return;
+  const body = acc.querySelector('.acc-body');
+  const chev = acc.querySelector('.acc-chev');
+  const isOpen = !acc.classList.contains('collapsed');
+  if (isOpen) {
+    acc.classList.add('collapsed');
+    body.style.display = 'none';
+    chev.textContent = '▸';
+  } else {
+    acc.classList.remove('collapsed');
+    body.style.display = '';
+    chev.textContent = '▾';
+  }
 }
 
 // ── Long Press for Recurring ─────────────────────────────────────
