@@ -2837,6 +2837,17 @@
   </div>
 </div>
 
+<!-- RECURRING DELETE CHOICE MODAL -->
+<div class="modal-overlay" id="rec-delete-modal" style="display:none;" onclick="if(event.target===this)closeRecDeleteModal()">
+  <div class="modal" style="max-width:340px;">
+    <div class="modal-header">
+      <div class="modal-title">🗑 Delete Rule</div>
+      <button class="modal-close" onclick="closeRecDeleteModal()">✕</button>
+    </div>
+    <div id="rec-delete-body" style="padding:0 4px 4px;"></div>
+  </div>
+</div>
+
 <!-- RECURRING RULE POPUP — triggered by long press on transaction -->
 <div class="modal-overlay" id="recurring-popup-modal" style="display:none;" onclick="if(event.target===this)closeRecurringPopup()">
   <div class="modal" style="max-width:360px;">
@@ -5116,13 +5127,30 @@ function saveRecurringFromPopup() {
 }
 
 function deleteRecurringFromPopup() {
-  if (!confirm('Remove recurring rule for this transaction?')) return;
-  data._recurring = (data._recurring||[]).filter(r =>
-    !(r._sourceMonth === _recPopupMonth && r._sourceIdx === _recPopupIdx));
-  save();
+  const rule = (data._recurring||[]).find(r => r._sourceMonth === _recPopupMonth && r._sourceIdx === _recPopupIdx);
+  if (!rule) return;
   closeRecurringPopup();
-  showToast('🗑 Recurring rule removed');
-  renderRecurringRules();
+  showRecDeleteModal(
+    rule,
+    () => {
+      data._recurring = (data._recurring||[]).filter(r =>
+        !(r._sourceMonth === _recPopupMonth && r._sourceIdx === _recPopupIdx));
+      save(); renderRecurringRules(); renderTransactions(); renderHome();
+      showToast('⏹ Rule stopped — past entries kept');
+    },
+    () => {
+      const typeMap = { expense:'expenses', income:'income', investment:'investments', debt:'debts', given:'givenToOthers', additional:'additional' };
+      const listKey = typeMap[rule.type] || 'expenses';
+      Object.keys(data).filter(k => /^\d{4}-\d{2}$/.test(k)).forEach(mk => {
+        if (data[mk]?.[listKey])
+          data[mk][listKey] = data[mk][listKey].filter(e => !e._recurringId?.startsWith(rule.id));
+      });
+      data._recurring = (data._recurring||[]).filter(r =>
+        !(r._sourceMonth === _recPopupMonth && r._sourceIdx === _recPopupIdx));
+      save(); renderRecurringRules(); renderTransactions(); renderHome();
+      showToast('🗑 Rule + all auto-posted entries removed');
+    }
+  );
 }
 
 // ── Recurring Transactions Scheduler ────────────────────────────
@@ -5150,7 +5178,7 @@ function runRecurringScheduler() {
         const occurrenceId = rule.id + '_' + dueDateStr;
         ensureMonth(dueMk);
         const alreadyPosted = (data[dueMk][listKey]||[]).some(e => e._recurringId === occurrenceId);
-        if (!alreadyPosted) {
+        if (!alreadyPosted && dueMk > rule.startMonth) {
           data[dueMk][listKey].push({ date: dueDateStr, category: rule.category, amount: rule.amount,
             currency: rule.currency || currentCurrency.code, description: rule.description || '',
             _recurringId: occurrenceId, _autoPosted: true });
@@ -5163,6 +5191,7 @@ function runRecurringScheduler() {
       const cy = parseInt((currentMk||'').split('-')[0]);
       const dueMk = cy + '-' + String(sm).padStart(2,'0');
       if (dueMk !== currentMk) return;
+      if (currentMk <= rule.startMonth) return;
       ensureMonth(currentMk);
       const alreadyPosted = (data[currentMk][listKey]||[]).some(e => e._recurringId === rule.id);
       if (alreadyPosted || todayDay < (rule.dayOfMonth||1)) return;
@@ -5172,7 +5201,8 @@ function runRecurringScheduler() {
         _recurringId: rule.id, _autoPosted: true });
       posted++;
     } else {
-      // Monthly (default)
+      // Monthly (default) — skip the month the rule was created in
+      if (currentMk <= rule.startMonth) return;
       ensureMonth(currentMk);
       const alreadyPosted = (data[currentMk][listKey]||[]).some(e => e._recurringId === rule.id);
       if (alreadyPosted || todayDay < (rule.dayOfMonth||1)) return;
@@ -5231,10 +5261,79 @@ function toggleRecurringRule(idx) {
 }
 
 function deleteRecurringRule(idx) {
-  if (!confirm('Delete this recurring rule?')) return;
-  data._recurring.splice(idx, 1);
-  save(); renderRecurringRules();
-  showToast('🗑 Recurring rule deleted');
+  const rule = data._recurring[idx];
+  if (!rule) return;
+  showRecDeleteModal(
+    rule,
+    () => {
+      // Stop future only — remove rule, keep history
+      data._recurring.splice(idx, 1);
+      save(); renderRecurringRules(); renderTransactions(); renderHome();
+      showToast('⏹ Rule stopped — past entries kept');
+    },
+    () => {
+      // Remove everything — rule + all auto-posts
+      const typeMap = { expense:'expenses', income:'income', investment:'investments', debt:'debts', given:'givenToOthers', additional:'additional' };
+      const listKey = typeMap[rule.type] || 'expenses';
+      Object.keys(data).filter(k => /^\d{4}-\d{2}$/.test(k)).forEach(mk => {
+        if (data[mk]?.[listKey])
+          data[mk][listKey] = data[mk][listKey].filter(e => !e._recurringId?.startsWith(rule.id));
+      });
+      data._recurring.splice(idx, 1);
+      save(); renderRecurringRules(); renderTransactions(); renderHome();
+      showToast('🗑 Rule + all auto-posted entries removed');
+    }
+  );
+}
+
+// ── Recurring Delete Choice Modal ───────────────────────────────
+let _recDeleteOnStop = null, _recDeleteOnAll = null;
+
+function showRecDeleteModal(rule, onStop, onAll) {
+  _recDeleteOnStop = onStop;
+  _recDeleteOnAll  = onAll;
+  const typeIcon = { expense:'💸', income:'💵', investment:'📈', debt:'📉', given:'🤝', additional:'🎁' };
+  const freq = rule.frequency === 'biweekly' ? 'Bi-weekly' :
+               rule.frequency === 'weekly'   ? 'Weekly'    :
+               rule.frequency === 'yearly'   ? 'Yearly'    : 'Monthly';
+  document.getElementById('rec-delete-body').innerHTML = `
+    <div style="background:#F8F8F8;border-radius:12px;padding:12px 14px;margin-bottom:16px;display:flex;align-items:center;gap:10px;">
+      <span style="font-size:1.4em;">${typeIcon[rule.type]||'🔁'}</span>
+      <div>
+        <div style="font-weight:900;font-size:0.9em;color:var(--text-dark);">${rule.category}</div>
+        <div style="font-size:0.75em;color:var(--text-light);font-weight:600;">${freq} · ${fmt(rule.amount)}</div>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px;">
+      <button onclick="recDeleteChoice('stop')"
+        style="background:#F0FBF3;border:1.5px solid #10B98130;border-radius:12px;padding:14px 16px;text-align:left;cursor:pointer;font-family:Nunito,sans-serif;">
+        <div style="font-weight:900;font-size:0.88em;color:#10B981;">⏹ Stop future posts</div>
+        <div style="font-size:0.75em;color:var(--text-light);font-weight:600;margin-top:3px;">
+          Keep all previously auto-posted entries intact
+        </div>
+      </button>
+      <button onclick="recDeleteChoice('all')"
+        style="background:#FFF0F0;border:1.5px solid #EF444430;border-radius:12px;padding:14px 16px;text-align:left;cursor:pointer;font-family:Nunito,sans-serif;">
+        <div style="font-weight:900;font-size:0.88em;color:#EF4444;">🗑 Remove everything</div>
+        <div style="font-size:0.75em;color:var(--text-light);font-weight:600;margin-top:3px;">
+          Delete rule and all auto-posted entries from all months
+        </div>
+      </button>
+    </div>`;
+  const modal = document.getElementById('rec-delete-modal');
+  if (modal) { modal.style.display = 'flex'; modal.classList.add('open'); }
+}
+
+function recDeleteChoice(choice) {
+  closeRecDeleteModal();
+  if (choice === 'stop' && _recDeleteOnStop) _recDeleteOnStop();
+  if (choice === 'all'  && _recDeleteOnAll)  _recDeleteOnAll();
+  _recDeleteOnStop = null; _recDeleteOnAll = null;
+}
+
+function closeRecDeleteModal() {
+  const modal = document.getElementById('rec-delete-modal');
+  if (modal) { modal.style.display = 'none'; modal.classList.remove('open'); }
 }
 
 // ── Transaction Search ──────────────────────────────────────────
@@ -5890,6 +5989,7 @@ function toggleNWType(type) {
 
 function renderSettings() {
   const months=Object.keys(data).filter(k=>!k.startsWith('_')).sort((a,b)=>b.localeCompare(a));
+  renderRecurringRules();
 
   // Theme badge
   document.querySelectorAll('.theme-card').forEach(c => c.classList.remove('active-theme'));
