@@ -1450,7 +1450,9 @@
   <div id="tx-search-results" style="display:none;"></div>
 
   <!-- Calendar Grid -->
-  <div class="cal-grid-wrap" id="cal-grid-wrap">
+  <div class="cal-grid-wrap" id="cal-grid-wrap"
+    ontouchstart="calSwipeStart(event)"
+    ontouchend="calSwipeEnd(event)">
     <div class="cal-dow-row">
       <div class="cal-dow">SUN</div><div class="cal-dow">MON</div><div class="cal-dow">TUE</div>
       <div class="cal-dow">WED</div><div class="cal-dow">THU</div><div class="cal-dow">FRI</div><div class="cal-dow">SAT</div>
@@ -2919,6 +2921,7 @@
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
             <select id="qa-rec-frequency" style="flex:1;background:var(--white);border:1.5px solid #DDD;border-radius:8px;padding:6px 8px;font-family:Nunito,sans-serif;font-weight:800;font-size:0.82em;">
               <option value="monthly">Monthly</option>
+              <option value="biweekly">Bi-weekly (every 2 weeks)</option>
               <option value="weekly">Weekly</option>
               <option value="yearly">Yearly</option>
             </select>
@@ -4090,6 +4093,7 @@ function qaSave() {
       frequency: freq,
       dayOfMonth: dayRaw,
       startMonth: monthKey,
+      startDate: monthKey + '-' + String(dayRaw).padStart(2,'0'),
       active: true,
       _sourceMonth: qaEditMonthKey || monthKey,
       _sourceIdx: qaEditIdx,
@@ -4847,6 +4851,23 @@ function renderCalListView(container) {
   container.innerHTML = html;
 }
 
+// ── Calendar swipe gesture ──────────────────────────────────────
+let _calSwipeX = null;
+
+function calSwipeStart(e) {
+  _calSwipeX = e.touches ? e.touches[0].clientX : null;
+}
+
+function calSwipeEnd(e) {
+  if (_calSwipeX === null) return;
+  const endX = e.changedTouches ? e.changedTouches[0].clientX : null;
+  if (endX === null) return;
+  const delta = endX - _calSwipeX;
+  _calSwipeX = null;
+  if (Math.abs(delta) < 50) return; // too short — ignore
+  calChangeMonth(delta < 0 ? 1 : -1); // swipe left = next, right = prev
+}
+
 function calChangeMonth(dir) {
   const [y,m] = viewMonth.split('-').map(Number);
   const d = new Date(y, m-1+dir, 1);
@@ -5050,6 +5071,7 @@ function openRecurringPopup(monthKey, type, idx) {
     <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center;">
       <select id="rec-popup-freq" style="flex:1;background:var(--white);border:1.5px solid #DDD;border-radius:8px;padding:8px 10px;font-family:Nunito,sans-serif;font-weight:800;font-size:0.85em;">
         <option value="monthly" ${(!existing||existing.frequency==='monthly')?'selected':''}>Monthly</option>
+        <option value="biweekly" ${existing?.frequency==='biweekly'?'selected':''}>Bi-weekly (every 2 weeks)</option>
         <option value="weekly" ${existing?.frequency==='weekly'?'selected':''}>Weekly</option>
         <option value="yearly" ${existing?.frequency==='yearly'?'selected':''}>Yearly</option>
       </select>
@@ -5101,6 +5123,7 @@ function saveRecurringFromPopup() {
     frequency: freq,
     dayOfMonth: day,
     startMonth: _recPopupMonth,
+    startDate: tx.date || `${_recPopupMonth}-${String(day).padStart(2,'0')}`,
     active: true,
     _sourceMonth: _recPopupMonth,
     _sourceIdx: _recPopupIdx,
@@ -5126,48 +5149,68 @@ function deleteRecurringFromPopup() {
 function runRecurringScheduler() {
   if (!data._recurring || !data._recurring.length) return;
   const now = new Date();
+  const today = now.toISOString().split('T')[0];
   const todayDay = now.getDate();
   const currentMk = getCurrentMonthKey();
   let posted = 0;
+  const typeMap = { expense:'expenses', income:'income', investment:'investments', debt:'debts', given:'givenToOthers', additional:'additional' };
 
   data._recurring.filter(r => r.active).forEach(rule => {
-    // Only post for current month onwards
     if (currentMk < rule.startMonth) return;
-
-    const typeMap = { expense:'expenses', income:'income', investment:'investments', debt:'debts', given:'givenToOthers', additional:'additional' };
     const listKey = typeMap[rule.type] || 'expenses';
-    ensureMonth(currentMk);
 
-    // Check if already posted this month (look for _recurringId tag)
-    const alreadyPosted = (data[currentMk][listKey] || []).some(e => e._recurringId === rule.id);
-    if (alreadyPosted) return;
-
-    // Post on or after the scheduled day
-    if (todayDay < rule.dayOfMonth) return;
-
-    // Create the entry
-    const dateStr = `${currentMk}-${String(rule.dayOfMonth).padStart(2,'0')}`;
-    const entry = {
-      date: dateStr,
-      category: rule.category,
-      amount: rule.amount,
-      currency: rule.currency || currentCurrency.code,
-      description: rule.description || '',
-      _recurringId: rule.id,
-      _autoPosted: true,
-    };
-    data[currentMk][listKey].push(entry);
-    posted++;
+    if (rule.frequency === 'biweekly' || rule.frequency === 'weekly') {
+      const intervalDays = rule.frequency === 'biweekly' ? 14 : 7;
+      const startDate = rule.startDate || (rule.startMonth + '-' + String(rule.dayOfMonth||1).padStart(2,'0'));
+      let cursor = new Date(startDate + 'T00:00:00');
+      const todayDate = new Date(today + 'T00:00:00');
+      while (cursor <= todayDate) {
+        const dueMk = cursor.getFullYear() + '-' + String(cursor.getMonth()+1).padStart(2,'0');
+        const dueDateStr = cursor.toISOString().split('T')[0];
+        const occurrenceId = rule.id + '_' + dueDateStr;
+        ensureMonth(dueMk);
+        const alreadyPosted = (data[dueMk][listKey]||[]).some(e => e._recurringId === occurrenceId);
+        if (!alreadyPosted) {
+          data[dueMk][listKey].push({ date: dueDateStr, category: rule.category, amount: rule.amount,
+            currency: rule.currency || currentCurrency.code, description: rule.description || '',
+            _recurringId: occurrenceId, _autoPosted: true });
+          posted++;
+        }
+        cursor.setDate(cursor.getDate() + intervalDays);
+      }
+    } else if (rule.frequency === 'yearly') {
+      const sm = parseInt((rule.startMonth||'').split('-')[1]||1);
+      const cy = parseInt((currentMk||'').split('-')[0]);
+      const dueMk = cy + '-' + String(sm).padStart(2,'0');
+      if (dueMk !== currentMk) return;
+      ensureMonth(currentMk);
+      const alreadyPosted = (data[currentMk][listKey]||[]).some(e => e._recurringId === rule.id);
+      if (alreadyPosted || todayDay < (rule.dayOfMonth||1)) return;
+      const dateStr = currentMk + '-' + String(rule.dayOfMonth||1).padStart(2,'0');
+      data[currentMk][listKey].push({ date: dateStr, category: rule.category, amount: rule.amount,
+        currency: rule.currency || currentCurrency.code, description: rule.description || '',
+        _recurringId: rule.id, _autoPosted: true });
+      posted++;
+    } else {
+      // Monthly (default)
+      ensureMonth(currentMk);
+      const alreadyPosted = (data[currentMk][listKey]||[]).some(e => e._recurringId === rule.id);
+      if (alreadyPosted || todayDay < (rule.dayOfMonth||1)) return;
+      const dateStr = currentMk + '-' + String(rule.dayOfMonth||1).padStart(2,'0');
+      data[currentMk][listKey].push({ date: dateStr, category: rule.category, amount: rule.amount,
+        currency: rule.currency || currentCurrency.code, description: rule.description || '',
+        _recurringId: rule.id, _autoPosted: true });
+      posted++;
+    }
   });
 
   if (posted > 0) {
     save();
-    showToast(`🔁 ${posted} recurring entr${posted === 1 ? 'y' : 'ies'} posted for ${getDisplayMonth(currentMk)}!`);
+    showToast('🔁 ' + posted + ' recurring entr' + (posted === 1 ? 'y' : 'ies') + ' auto-posted!');
     renderHome();
     renderTransactions();
   }
 }
-
 // ── Recurring Rules Management ───────────────────────────────────
 function renderRecurringRules() {
   const el = document.getElementById('recurring-rules-list');
