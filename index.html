@@ -4799,6 +4799,10 @@ function addHomeCard() {
 // NAVIGATION
 // ══════════════════════════════════════════════════════
 function switchScreen(name, btn) {
+  // Clear transaction search when navigating away from tx screen
+  if (name !== 'tx' && _txSearchActive) {
+    clearTxSearch();
+  }
   // Always close goals overlay when navigating away
   const goalsOverlay = document.getElementById('blist-goals');
   if (goalsOverlay) goalsOverlay.style.display = 'none';
@@ -5537,6 +5541,10 @@ function onTxSearch(q) {
       });
     });
   });
+  // Apply family author filter on top of search if active
+  if (_authorFilter !== 'all') {
+    results = results.filter(r => r._addedBy === _authorFilter);
+  }
 
   if (results.length === 0) {
     resultsEl.innerHTML = `<div style="text-align:center;padding:32px;color:var(--text-light);font-weight:700;font-size:0.9em;">
@@ -5551,9 +5559,10 @@ function onTxSearch(q) {
     byMonth[r._month].push(r);
   });
 
+  const authorTag = _authorFilter !== 'all' ? ` · 👤 ${_authorFilter}` : '';
   resultsEl.innerHTML = `
     <div style="font-size:0.78em;font-weight:800;color:var(--text-light);margin-bottom:10px;padding:0 2px;">
-      ${results.length} result${results.length !== 1 ? 's' : ''} across ${Object.keys(byMonth).length} month${Object.keys(byMonth).length !== 1 ? 's' : ''}
+      ${results.length} result${results.length !== 1 ? 's' : ''} across ${Object.keys(byMonth).length} month${Object.keys(byMonth).length !== 1 ? 's' : ''}${authorTag}
     </div>` +
     Object.keys(byMonth).sort().reverse().map(mk => `
       <div style="margin-bottom:14px;">
