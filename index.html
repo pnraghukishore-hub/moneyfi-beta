@@ -169,7 +169,7 @@
     .income-sub-card .isc-amount { font-size: 1em; font-weight: 900; color: var(--income); }
 
     .budget-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
-    .budget-card { background: var(--white); border-radius: var(--radius); padding: 16px 12px 14px; text-align: center; box-shadow: var(--card-shadow); cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; }
+    .budget-card { background: var(--white); border-radius: var(--radius); padding: 16px 12px 14px; text-align: center; box-shadow: var(--card-shadow); cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
     .budget-card:hover { transform: translateY(-2px); box-shadow: var(--card-shadow-hover); }
     .budget-card .cat-icon { width: 48px; height: 48px; border-radius: 14px; margin: 0 auto 10px; display: flex; align-items: center; justify-content: center; font-size: 1.4em; }
     .budget-card .cat-name { font-size: 0.72em; font-weight: 700; color: var(--text-med); margin-bottom: 4px; }
@@ -265,9 +265,14 @@
     .cal-dot { width:5px; height:5px; border-radius:50%; flex-shrink:0; }
     .cal-cell-amt { font-size:0.58em; font-weight:900; line-height:1.3; text-align:center; }
     .cal-detail-header { font-size:0.82em; font-weight:800; color:var(--text-light); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:10px; padding:0 4px; display:flex; justify-content:space-between; align-items:center; }
-    .author-chips { display:flex; gap:6px; flex-wrap:nowrap; overflow-x:auto; padding:0 0 8px; scrollbar-width:none; margin-bottom:4px; }
-    .author-chips::-webkit-scrollbar { display:none; }
-    .author-chip { flex-shrink:0; padding:5px 12px; border-radius:20px; font-size:0.72em; font-weight:800; border:1.5px solid #E8E8E8; background:white; color:var(--text-med); cursor:pointer; transition:all 0.15s; font-family:Nunito,sans-serif; }
+    .author-filter-wrap { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+    .author-toggle-btn { flex-shrink:0; width:34px; height:34px; border-radius:50%; background:var(--white); border:1.5px solid #E8E8E8; display:flex; align-items:center; justify-content:center; font-size:1em; cursor:pointer; box-shadow:0 1px 4px rgba(0,0,0,0.08); transition:all 0.2s; }
+    .author-toggle-btn.active { background:var(--yellow); border-color:var(--yellow); }
+    .author-chips-slide { display:flex; gap:6px; flex:1; overflow:hidden; max-width:0; transition:max-width 0.35s ease, opacity 0.25s ease; opacity:0; }
+    .author-chips-slide.open { max-width:600px; opacity:1; }
+    .author-chips-scroll { display:flex; gap:6px; overflow-x:auto; scrollbar-width:none; }
+    .author-chips-scroll::-webkit-scrollbar { display:none; }
+    .author-chip { flex-shrink:0; padding:5px 12px; border-radius:20px; font-size:0.72em; font-weight:800; border:1.5px solid #E8E8E8; background:white; color:var(--text-med); cursor:pointer; transition:all 0.15s; font-family:Nunito,sans-serif; white-space:nowrap; }
     .author-chip.active { background:var(--yellow); border-color:var(--yellow); color:var(--text-dark); }
     .cal-detail-header .cal-det-right { display:flex; gap:8px; }
     .cal-empty-day { background:var(--white); border-radius:var(--radius); box-shadow:var(--card-shadow); padding:24px; text-align:center; color:var(--text-light); }
@@ -1446,9 +1451,14 @@
       background:none;border:none;font-size:1em;cursor:pointer;color:var(--text-light);
       font-weight:900;padding:2px 6px;">✕</button>
   </div>
-  <!-- Author filter chips — shown only in family mode (>1 author in month) -->
-  <div id="author-filter-strip" style="display:none;margin-bottom:8px;">
-    <div class="author-chips" id="author-chips-row"></div>
+  <!-- Author filter — 👥 icon, tap to slide out member chips -->
+  <div id="author-filter-strip" style="display:none;">
+    <div class="author-filter-wrap">
+      <div class="author-toggle-btn" id="author-toggle-btn" onclick="toggleAuthorChips()" title="Filter by family member">👥</div>
+      <div class="author-chips-slide" id="author-chips-slide">
+        <div class="author-chips-scroll" id="author-chips-row"></div>
+      </div>
+    </div>
   </div>
   <!-- Search Results (hidden when not searching) -->
   <div id="tx-search-results" style="display:none;"></div>
@@ -4970,9 +4980,12 @@ function renderAuthorChips() {
   strip.style.display = '';
   const chips = ['all', ...authors].map(a =>
     `<div class="author-chip ${_authorFilter===a?'active':''}"
-      onclick="setAuthorFilter('${a}')">${a==='all'?'👥 All':a}</div>`
+      onclick="setAuthorFilter('${a}')">${a==='all'?'All':a}</div>`
   ).join('');
   row.innerHTML = chips;
+  // Highlight 👥 button when a member filter is active
+  const btn = document.getElementById('author-toggle-btn');
+  if (btn) btn.classList.toggle('active', _authorFilter !== 'all');
 }
 
 function renderTransactions() {
@@ -5413,6 +5426,21 @@ function closeRecDeleteModal() {
 }
 
 // ── Author Filter ───────────────────────────────────────────────
+let _authorChipsOpen = false;
+
+function toggleAuthorChips() {
+  _authorChipsOpen = !_authorChipsOpen;
+  const slide  = document.getElementById('author-chips-slide');
+  const btn    = document.getElementById('author-toggle-btn');
+  if (slide) slide.classList.toggle('open', _authorChipsOpen);
+  if (btn)   btn.classList.toggle('active', _authorChipsOpen);
+  // Reset filter when closing
+  if (!_authorChipsOpen && _authorFilter !== 'all') {
+    _authorFilter = 'all';
+    renderTransactions();
+  }
+}
+
 function setAuthorFilter(author) {
   _authorFilter = author;
   renderTransactions(); // re-renders chips + day detail
@@ -7201,40 +7229,47 @@ function handleHomeCardClick(e, type, subcat) {
 }
 
 function goToBudgetDetail(cardKey) {
-  // Find matching budget goal by key or name match
+  // Find the home card to get its subcategories
+  const cards = getHomeSpendCards();
+  const card  = cards.find(c => (c.key||c.label) === cardKey);
+  const subcats = card ? (card.subcats || [card.label]) : [cardKey];
+  const cardLabel = card ? card.label : cardKey;
+
+  // Try to find matching budget goal
   const expGoals = getBudgetGoals('expense');
   const savGoals = getBudgetGoals('savings');
-
-  // Try exact key match first, then fuzzy name match
   let goal = expGoals.find(g => g.key === cardKey);
   let type = 'expense';
+  if (!goal) { goal = savGoals.find(g => g.key === cardKey); type = 'savings'; }
   if (!goal) {
-    goal = savGoals.find(g => g.key === cardKey);
-    type = 'savings';
-  }
-  if (!goal) {
-    // Fuzzy: check if cardKey appears in linkedCats or name
     goal = expGoals.find(g =>
-      (g.linkedCats||[g.key]).some(c => c.toLowerCase().includes(cardKey.toLowerCase())) ||
-      (g.name||g.key).toLowerCase().includes(cardKey.toLowerCase())
+      (g.linkedCats||[g.key]).some(c => subcats.map(s=>s.toLowerCase()).includes(c.toLowerCase())) ||
+      (g.name||g.key).toLowerCase() === cardLabel.toLowerCase()
     );
     type = 'expense';
   }
 
-  // Navigate to budget screen
-  showScreen('budget');
-  setBudgetTab('overview', document.getElementById('btab-overview'));
-
   if (goal) {
-    // Small delay to let budget screen render first
+    // Budget goal exists — navigate to budget drill-down
+    showScreen('budget');
+    setBudgetTab('overview', document.getElementById('btab-overview'));
     setTimeout(() => {
       openBudgetCatDetail(type, goal.key);
       showToast(`📊 ${goal.name || goal.key}`);
     }, 150);
   } else {
-    // No matching goal yet — go to budget overview with a hint
+    // No budget goal — navigate to transaction screen, filter by category
+    showScreen('tx');
     setTimeout(() => {
-      showToast(`💡 No budget set for ${cardKey} yet — tap + to add one`);
+      // Use search to filter this category's transactions
+      const searchInput = document.getElementById('tx-search-input');
+      if (searchInput) {
+        // Search by first subcat or card label
+        const searchTerm = subcats[0] || cardLabel;
+        searchInput.value = searchTerm;
+        onTxSearch(searchTerm);
+        showToast(`🔍 Showing ${cardLabel} transactions`);
+      }
     }, 150);
   }
 }
