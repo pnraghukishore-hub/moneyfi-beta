@@ -4985,7 +4985,11 @@ function renderTransactions() {
   const [y, mo] = viewMonth.split('-').map(Number);
 
   const titleEl = document.getElementById('cal-month-title');
-  if(titleEl) titleEl.textContent = getDisplayMonth(viewMonth);
+  if(titleEl) {
+    const filterLabel = _authorFilter !== 'all' ? ` · ${_authorFilter}` : '';
+    titleEl.textContent = getDisplayMonth(viewMonth) + filterLabel;
+    titleEl.style.color = _authorFilter !== 'all' ? 'var(--primary)' : '';
+  }
 
   // Gather all transactions — normalize dates so YYYY-M-D matches YYYY-MM-DD
   let allTx = [];
@@ -5000,12 +5004,13 @@ function renderTransactions() {
   pushTx(m.givenToOthers, 'given');
   pushTx(m.additional,    'additional');
 
-  // Summary — convert each entry to display currency before summing
+  // Summary — apply author filter then convert to display currency
   const toDisp = t => convertAmt(t.amount, t.currency);
-  const totalInc  = allTx.filter(t=>t._type==='income').reduce((s,t)=>s+toDisp(t),0);
-  const totalExp  = allTx.filter(t=>t._type==='expense'||t._type==='additional').reduce((s,t)=>s+toDisp(t),0);
-  const totalInv  = allTx.filter(t=>t._type==='investment').reduce((s,t)=>s+toDisp(t),0);
-  const totalOther= allTx.filter(t=>t._type==='debt'||t._type==='given').reduce((s,t)=>s+toDisp(t),0);
+  const summaryTx = _authorFilter === 'all' ? allTx : allTx.filter(t => t._addedBy === _authorFilter);
+  const totalInc  = summaryTx.filter(t=>t._type==='income').reduce((s,t)=>s+toDisp(t),0);
+  const totalExp  = summaryTx.filter(t=>t._type==='expense'||t._type==='additional').reduce((s,t)=>s+toDisp(t),0);
+  const totalInv  = summaryTx.filter(t=>t._type==='investment').reduce((s,t)=>s+toDisp(t),0);
+  const totalOther= summaryTx.filter(t=>t._type==='debt'||t._type==='given').reduce((s,t)=>s+toDisp(t),0);
   const savings   = totalInv;  // "Investing" tile shows investments amount
   const net       = totalInc - totalExp - totalInv - totalOther;
 
@@ -5021,9 +5026,14 @@ function renderTransactions() {
     el_net.style.color = net>=0 ? 'var(--income)' : 'var(--expenses)';
   }
 
+  // Apply author filter — if a member is selected, only show their transactions on calendar
+  const visibleTx = _authorFilter === 'all'
+    ? allTx
+    : allTx.filter(t => t._addedBy === _authorFilter);
+
   // Group by normalized date
   const byDate = {};
-  allTx.forEach(t => {
+  visibleTx.forEach(t => {
     const d = t.date||'';
     if(d) { if(!byDate[d]) byDate[d]=[]; byDate[d].push(t); }
   });
@@ -5065,7 +5075,7 @@ function renderTransactions() {
 
   const calGrid = document.getElementById('cal-grid');
   if(calGrid) calGrid.innerHTML = cells;
-  renderCalDayDetail(allTx);
+  renderCalDayDetail(visibleTx);
 }
 
 // ── Settings Accordion ──────────────────────────────────────────
