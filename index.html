@@ -265,6 +265,10 @@
     .cal-dot { width:5px; height:5px; border-radius:50%; flex-shrink:0; }
     .cal-cell-amt { font-size:0.58em; font-weight:900; line-height:1.3; text-align:center; }
     .cal-detail-header { font-size:0.82em; font-weight:800; color:var(--text-light); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:10px; padding:0 4px; display:flex; justify-content:space-between; align-items:center; }
+    .author-chips { display:flex; gap:6px; flex-wrap:nowrap; overflow-x:auto; padding:0 0 8px; scrollbar-width:none; margin-bottom:4px; }
+    .author-chips::-webkit-scrollbar { display:none; }
+    .author-chip { flex-shrink:0; padding:5px 12px; border-radius:20px; font-size:0.72em; font-weight:800; border:1.5px solid #E8E8E8; background:white; color:var(--text-med); cursor:pointer; transition:all 0.15s; font-family:Nunito,sans-serif; }
+    .author-chip.active { background:var(--yellow); border-color:var(--yellow); color:var(--text-dark); }
     .cal-detail-header .cal-det-right { display:flex; gap:8px; }
     .cal-empty-day { background:var(--white); border-radius:var(--radius); box-shadow:var(--card-shadow); padding:24px; text-align:center; color:var(--text-light); }
 
@@ -3600,7 +3604,13 @@ function renderHome() {
         ? subcats.reduce((s,sc)=>s+(catTotals[sc]||0),0)
         : (catTotals[card.label]||0);
       const pct = allExp>0 ? Math.min(amt/allExp*100,100) : 0;
-      return `<div class="budget-card ${card.cls||'other-cat'}" onclick="openQuickAdd('expense','${subcats[0]||card.label}')">
+      return `<div class="budget-card ${card.cls||'other-cat'}"
+        onclick="openQuickAdd('expense','${subcats[0]||card.label}')"
+        ontouchstart="startHomeLongPress(event,'${card.key||card.label}')"
+        ontouchend="clearHomeLongPress()"
+        ontouchmove="clearHomeLongPress()"
+        oncontextmenu="event.preventDefault();goToBudgetDetail('${card.key||card.label}')"
+        title="Tap to add · Hold to view transactions">
         <div class="cat-icon" style="background:${card.color}22;">${card.icon}</div>
         <div class="cat-name">${card.label}</div>
         <div class="cat-amount">${fmt(amt)}</div>
@@ -4059,7 +4069,10 @@ function qaSave() {
   const isRefund = document.getElementById('qa-refund-toggle').classList.contains('active');
   const finalAmt = isRefund ? -Math.abs(amount) : amount;
 
-  const entry = { date: normalizeDate(date), category: qaSubCat||'Other', amount: finalAmt, description: note, currency: currentCurrency.code };
+  // Tag who added this entry — used for family attribution filter
+  const _currentUser = firebase.auth().currentUser;
+  const _addedBy = _currentUser ? (_currentUser.displayName || _currentUser.email || 'You') : 'You';
+  const entry = { date: normalizeDate(date), category: qaSubCat||'Other', amount: finalAmt, description: note, currency: currentCurrency.code, _addedBy };
 
   // If this is a metal purchase, attach grams so the transaction carries full context
   const isMetal = qaType === 'investment' && _METAL_CATS.some(m => (qaSubCat||'').toLowerCase().includes(m));
@@ -5346,8 +5359,15 @@ function closeRecDeleteModal() {
   if (modal) { modal.style.display = 'none'; modal.classList.remove('open'); }
 }
 
+// ── Author Filter ───────────────────────────────────────────────
+function setAuthorFilter(author) {
+  _authorFilter = author;
+  renderTransactions();
+}
+
 // ── Transaction Search ──────────────────────────────────────────
 let _txSearchActive = false;
+let _authorFilter = 'all'; // 'all' or specific author name
 
 function onTxSearch(q) {
   const clearBtn = document.getElementById('tx-search-clear');
@@ -5508,9 +5528,19 @@ function renderCalDayDetail(allTx) {
       </div>
     </div>
 
+    <!-- Author filter chips — only shown when >1 author in this day's transactions -->
+    ${(()=>{
+      const authors = [...new Set(dayTx.map(t => t._addedBy).filter(Boolean))];
+      if (authors.length <= 1) return '';
+      const chips = ['all', ...authors].map(a =>
+        `<div class="author-chip ${_authorFilter===a?'active':''}" onclick="setAuthorFilter('${a}')">${a==='all'?'👥 All':a}</div>`
+      ).join('');
+      return `<div class="author-chips">${chips}</div>`;
+    })()}
+
     <!-- Transaction rows — view only, ✕ to delete -->
     <div style="display:flex;flex-direction:column;gap:8px;">
-      ${dayTx.map(t=>`
+      ${dayTx.filter(t => _authorFilter === 'all' || t._addedBy === _authorFilter).map(t=>`
         <div style="background:var(--white);border-radius:var(--radius-sm);box-shadow:0 2px 10px rgba(0,0,0,0.06);padding:12px 14px;display:flex;align-items:center;gap:12px;">
           <!-- Icon — long press for recurring -->
           <div
@@ -5526,6 +5556,7 @@ function renderCalDayDetail(allTx) {
               <span style="font-size:0.65em;font-weight:800;color:${colorMap[t._type]};background:${bgMap[t._type]};border-radius:20px;padding:2px 7px;flex-shrink:0;">${typeLabel[t._type]||t._type}</span>
             </div>
             <div style="font-size:0.78em;color:var(--text-light);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${t.description||'—'}</div>
+            ${t._addedBy && t._addedBy !== 'You' ? `<div style="font-size:0.65em;color:#A0A8C0;font-weight:700;margin-top:1px;">👤 ${t._addedBy}</div>` : ''}
           </div>
           <!-- Amount -->
           <div style="text-align:right;flex-shrink:0;">
@@ -7068,6 +7099,61 @@ function renderGoalsPanel() {
       ${(g.mappedAccounts||[]).length > 0 ? `<div style="font-size:0.7em;font-weight:600;color:var(--text-light);margin-top:5px;border-top:1px solid #F5F5F5;padding-top:5px;">📊 ${g.mappedAccounts.length} account${g.mappedAccounts.length>1?'s':''} mapped</div>` : ''}
     </div>`;
   }).join('');
+}
+
+// ── Home card long press → Budget detail ────────────────────────
+let _homeLongPressTimer = null;
+let _homeLongPressKey   = null;
+
+function startHomeLongPress(e, cardKey) {
+  _homeLongPressKey = cardKey;
+  _homeLongPressTimer = setTimeout(() => {
+    clearHomeLongPress();
+    goToBudgetDetail(cardKey);
+  }, 600);
+}
+
+function clearHomeLongPress() {
+  if (_homeLongPressTimer) { clearTimeout(_homeLongPressTimer); _homeLongPressTimer = null; }
+}
+
+function goToBudgetDetail(cardKey) {
+  // Find matching budget goal by key or name match
+  const expGoals = getBudgetGoals('expense');
+  const savGoals = getBudgetGoals('savings');
+
+  // Try exact key match first, then fuzzy name match
+  let goal = expGoals.find(g => g.key === cardKey);
+  let type = 'expense';
+  if (!goal) {
+    goal = savGoals.find(g => g.key === cardKey);
+    type = 'savings';
+  }
+  if (!goal) {
+    // Fuzzy: check if cardKey appears in linkedCats or name
+    goal = expGoals.find(g =>
+      (g.linkedCats||[g.key]).some(c => c.toLowerCase().includes(cardKey.toLowerCase())) ||
+      (g.name||g.key).toLowerCase().includes(cardKey.toLowerCase())
+    );
+    type = 'expense';
+  }
+
+  // Navigate to budget screen
+  showScreen('budget');
+  setBudgetTab('overview', document.getElementById('btab-overview'));
+
+  if (goal) {
+    // Small delay to let budget screen render first
+    setTimeout(() => {
+      openBudgetCatDetail(type, goal.key);
+      showToast(`📊 ${goal.name || goal.key}`);
+    }, 150);
+  } else {
+    // No matching goal yet — go to budget overview with a hint
+    setTimeout(() => {
+      showToast(`💡 No budget set for ${cardKey} yet — tap + to add one`);
+    }, 150);
+  }
 }
 
 // ── Budget swipe gesture ────────────────────────────────────────
