@@ -3606,9 +3606,10 @@ function renderHome() {
       const pct = allExp>0 ? Math.min(amt/allExp*100,100) : 0;
       return `<div class="budget-card ${card.cls||'other-cat'}"
         onclick="handleHomeCardClick(event,'expense','${subcats[0]||card.label}')"
-        ontouchstart="startHomeLongPress(event,'${card.key||card.label}')"
-        ontouchend="clearHomeLongPress()"
-        ontouchmove="clearHomeLongPress()"
+        onpointerdown="startHomeLongPress(event,'${card.key||card.label}')"
+        onpointerup="clearHomeLongPress()"
+        onpointercancel="clearHomeLongPress()"
+        onpointermove="clearHomeLongPress()"
         oncontextmenu="event.preventDefault();goToBudgetDetail('${card.key||card.label}')"
         title="Tap to add · Hold to view transactions">
         <div class="cat-icon" style="background:${card.color}22;">${card.icon}</div>
@@ -3815,7 +3816,10 @@ function openQuickAdd(type, subCat) {
 
   // Reset amount
   document.getElementById('qa-amount-display').value = '0';
-  document.getElementById('qa-date-input').value = new Date().toISOString().split('T')[0];
+  // Use local date (not UTC) to avoid timezone off-by-one for IST/+5:30 users
+  const _now = new Date();
+  const _localDate = `${_now.getFullYear()}-${String(_now.getMonth()+1).padStart(2,'0')}-${String(_now.getDate()).padStart(2,'0')}`;
+  document.getElementById('qa-date-input').value = _localDate;
   document.getElementById('qa-note-input').value = '';
   const _mg = document.getElementById('qa-metal-grams'); if (_mg) _mg.value = '';
   const _mf = document.getElementById('qa-metal-fields'); if (_mf) _mf.style.display = 'none';
@@ -3923,8 +3927,17 @@ let qaDeleteMode = false;
 function qaRenderSubCats() {
   qaDeleteMode = false;
   const cats = getCatsForType(qaType);
-  qaSubCat = qaPreselectSubCat || cats[0] || '';
-  if(qaPreselectSubCat && !cats.includes(qaPreselectSubCat)) {
+  if (qaPreselectSubCat) {
+    // Case-insensitive match first
+    const match = cats.find(c => c.toLowerCase() === qaPreselectSubCat.toLowerCase());
+    if (match) {
+      qaSubCat = match; // use exact casing from list
+    } else {
+      // Category not in list — insert it at front so it's selectable
+      cats.unshift(qaPreselectSubCat);
+      qaSubCat = qaPreselectSubCat;
+    }
+  } else {
     qaSubCat = cats[0] || '';
   }
   _renderQaPills(cats);
