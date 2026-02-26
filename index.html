@@ -1378,15 +1378,21 @@
         <div class="home-income-total" id="home-income">$0</div>
       </div>
       <div class="income-sub-grid">
-        <div class="income-sub-card" onclick="openQuickAdd('income','Salary')">
+        <div class="income-sub-card" style="user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;"
+          ontouchstart="homeCardTouchStart(event,'Salary','income','Salary')"
+          ontouchend="homeCardTouchEnd(event)" ontouchmove="homeCardTouchMove(event)">
           <div class="isc-icon">💼</div><div class="isc-name">Salary</div>
           <div class="isc-amount" id="home-salary">$0</div>
         </div>
-        <div class="income-sub-card" onclick="openQuickAdd('income','Gift')">
+        <div class="income-sub-card" style="user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;"
+          ontouchstart="homeCardTouchStart(event,'Gift','income','Gift')"
+          ontouchend="homeCardTouchEnd(event)" ontouchmove="homeCardTouchMove(event)">
           <div class="isc-icon">🎁</div><div class="isc-name">Gifts</div>
           <div class="isc-amount" id="home-gifts">$0</div>
         </div>
-        <div class="income-sub-card" onclick="openQuickAdd('income','Other')">
+        <div class="income-sub-card" style="user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;"
+          ontouchstart="homeCardTouchStart(event,'Other','income','Other')"
+          ontouchend="homeCardTouchEnd(event)" ontouchmove="homeCardTouchMove(event)">
           <div class="isc-icon">💰</div><div class="isc-name">Others</div>
           <div class="isc-amount" id="home-other-income">$0</div>
         </div>
@@ -3359,6 +3365,12 @@ function getMetalBasePrice(metalType) {
 // HELPERS
 // ══════════════════════════════════════════════════════
 function getCurrentMonthKey() { const n=new Date(); return `${n.getFullYear()}-${(n.getMonth()+1).toString().padStart(2,'0')}`; }
+
+// Always use local device date — never UTC (avoids IST +5:30 tomorrow bug)
+function localDateStr(d) {
+  const dt = d || new Date();
+  return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+}
 function getMonthKey(dateStr) { if(!dateStr) return null; const dt=new Date(dateStr); if(isNaN(dt.getTime())) return null; return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}`; }
 function getDisplayMonth(key) { if(!key) return ''; const[y,m]=key.split('-'); return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][parseInt(m)-1]+' '+y; }
 function getFullDisplayMonth(key) { if(!key) return ''; const[y,m]=key.split('-'); return ['January','February','March','April','May','June','July','August','September','October','November','December'][parseInt(m)-1]+' '+y; }
@@ -3452,12 +3464,12 @@ function changePeriod(dir) {
   } else if(currentPeriod === 'week') {
     const d = selectedDay ? new Date(selectedDay+'T00:00:00') : new Date();
     d.setDate(d.getDate() + dir*7);
-    selectedDay = d.toISOString().split('T')[0];
+    selectedDay = localDateStr(d);
     viewMonth = getMonthKey(selectedDay);
   } else if(currentPeriod === 'day') {
     const d = selectedDay ? new Date(selectedDay+'T00:00:00') : new Date();
     d.setDate(d.getDate() + dir);
-    selectedDay = d.toISOString().split('T')[0];
+    selectedDay = localDateStr(d);
     viewMonth = getMonthKey(selectedDay);
   }
   updatePeriodLabel();
@@ -3499,11 +3511,11 @@ function renderPeriodDetail() {
     const anchor = selectedDay ? new Date(selectedDay+'T00:00:00') : new Date();
     const weekStart = new Date(anchor);
     weekStart.setDate(anchor.getDate() - anchor.getDay());
-    const today = new Date().toISOString().split('T')[0];
+    const today = localDateStr();
     const dayNames = ['Su','Mo','Tu','We','Th','Fr','Sa'];
     detail.innerHTML = Array.from({length:7}).map((_,i) => {
       const d = new Date(weekStart); d.setDate(weekStart.getDate()+i);
-      const ds = d.toISOString().split('T')[0];
+      const ds = localDateStr(d);
       const isToday = ds === today;
       const isSel = ds === selectedDay;
       return `<div class="day-chip ${isToday?'today':''} ${isSel?'selected':''}" onclick="selectDay('${ds}')">
@@ -3537,15 +3549,15 @@ function getPeriodEntries(monthData, type) {
   const entries = (monthData[type] || []);
   if(currentPeriod === 'month' || currentPeriod === 'year') return entries;
   if(currentPeriod === 'day') {
-    const d = selectedDay || new Date().toISOString().split('T')[0];
+    const d = selectedDay || localDateStr();
     return entries.filter(e => e.date === d);
   }
   if(currentPeriod === 'week') {
     const anchor = selectedDay ? new Date(selectedDay+'T00:00:00') : new Date();
     const weekStart = new Date(anchor); weekStart.setDate(anchor.getDate()-anchor.getDay());
     const weekEnd = new Date(weekStart); weekEnd.setDate(weekStart.getDate()+6);
-    const ws = weekStart.toISOString().split('T')[0];
-    const we = weekEnd.toISOString().split('T')[0];
+    const ws = localDateStr(weekStart);
+    const we = localDateStr(weekEnd);
     return entries.filter(e => e.date >= ws && e.date <= we);
   }
   return entries;
@@ -3888,7 +3900,7 @@ function openEditTx(monthKey, type, idx) {
 
   // Pre-fill fields
   document.getElementById('qa-amount-display').value = qaAmountStr;
-  document.getElementById('qa-date-input').value = tx.date || new Date().toISOString().split('T')[0];
+  document.getElementById('qa-date-input').value = tx.date || localDateStr();
   document.getElementById('qa-note-input').value = tx.description || '';
 
   qaRenderSubCats();
@@ -4089,7 +4101,7 @@ function qaToggleRecurring() {
 function qaSave() {
   const amount = parseFloat(qaAmountStr);
   if(!amount || amount <= 0) { showToast('Enter an amount ❌'); return; }
-  const date    = document.getElementById('qa-date-input').value || new Date().toISOString().split('T')[0];
+  const date    = document.getElementById('qa-date-input').value || localDateStr();
   const note    = document.getElementById('qa-note-input').value.trim();
   const monthKey = getMonthKey(date) || getCurrentMonthKey();
   ensureMonth(monthKey);
@@ -4240,7 +4252,7 @@ let invFieldCurrency = {...currentCurrency};
 function openInvModal(type) {
   invModalType = type || 'Stocks';
   invFieldCurrency = {...currentCurrency};
-  document.getElementById('inv-modal-date').value = new Date().toISOString().split('T')[0];
+  document.getElementById('inv-modal-date').value = localDateStr();
   document.getElementById('inv-modal-note').value = '';
   document.getElementById('inv-computed-total').textContent = sym()+'0';
   updateInvCurrBtn();
@@ -4319,7 +4331,7 @@ function calcInvTotal() {
 }
 
 function saveInvEntry() {
-  const date = document.getElementById('inv-modal-date').value||new Date().toISOString().split('T')[0];
+  const date = document.getElementById('inv-modal-date').value||localDateStr();
   const note = document.getElementById('inv-modal-note').value.trim();
   const g = id => parseFloat(document.getElementById(id)?.value||'0')||0;
   const s = id => (document.getElementById(id)?.value||'').trim();
@@ -4817,6 +4829,10 @@ function switchScreen(name, btn) {
 }
 
 function goToScreen(name) {
+  // Clear transaction search when navigating away from tx screen
+  if (name !== 'tx' && _txSearchActive) {
+    clearTxSearch();
+  }
   const goalsOverlay = document.getElementById('blist-goals');
   if (goalsOverlay) goalsOverlay.style.display = 'none';
   closeGoalSheet();
@@ -4975,9 +4991,26 @@ function renderAuthorChips() {
   ];
   const authors = [...new Set(allEntries.map(e => e._addedBy).filter(Boolean))];
 
-  if (authors.length <= 1) {
+  // Show family icon if there are ANY family members (firebase users sharing)
+  // even if no transactions from others this month
+  const isFamily = firebase.auth().currentUser !== null && 
+    (data._familyMembers || []).length > 0 || authors.length > 1;
+  
+  if (authors.length <= 1 && !isFamily) {
     strip.style.display = 'none';
-    _authorFilter = 'all'; // reset when only one author
+    _authorFilter = 'all';
+    return;
+  }
+  
+  if (authors.length <= 1) {
+    // Family group but no multi-author transactions this month
+    // Show icon only, no chips needed
+    strip.style.display = '';
+    row.innerHTML = '';
+    const btn = document.getElementById('author-toggle-btn');
+    if (btn) { btn.classList.remove('active'); }
+    const slide = document.getElementById('author-chips-slide');
+    if (slide) { slide.classList.remove('open'); _authorChipsOpen = false; }
     return;
   }
 
@@ -4996,7 +5029,7 @@ function renderTransactions() {
   renderAuthorChips();
   ensureMonth(viewMonth);
   const m = data[viewMonth];
-  const today = new Date().toISOString().split('T')[0];
+  const today = localDateStr();
   const [y, mo] = viewMonth.split('-').map(Number);
 
   const titleEl = document.getElementById('cal-month-title');
@@ -5046,12 +5079,14 @@ function renderTransactions() {
     ? allTx
     : allTx.filter(t => t._addedBy === _authorFilter);
 
-  // Group by normalized date
+  // Group by normalized date — sort each day's txns desc by date then idx
   const byDate = {};
   visibleTx.forEach(t => {
     const d = t.date||'';
     if(d) { if(!byDate[d]) byDate[d]=[]; byDate[d].push(t); }
   });
+  // Sort within each day: most recently added (highest idx) first
+  Object.values(byDate).forEach(arr => arr.sort((a,b) => (b._idx||0) - (a._idx||0)));
 
   // Build calendar grid
   const firstDow = new Date(y, mo-1, 1).getDay();
@@ -5267,7 +5302,7 @@ function runRecurringScheduler() {
       const todayDate = new Date(today + 'T00:00:00');
       while (cursor <= todayDate) {
         const dueMk = cursor.getFullYear() + '-' + String(cursor.getMonth()+1).padStart(2,'0');
-        const dueDateStr = cursor.toISOString().split('T')[0];
+        const dueDateStr = localDateStr(cursor);
         const occurrenceId = rule.id + '_' + dueDateStr;
         ensureMonth(dueMk);
         const alreadyPosted = (data[dueMk][listKey]||[]).some(e => e._recurringId === occurrenceId);
@@ -5529,26 +5564,58 @@ function onTxSearch(q) {
           const d = t.date ? new Date(t.date+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '';
           const amt = convertAmt(t.amount, t.currency);
           return `<div style="background:var(--white);border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.06);
-                              padding:11px 14px;display:flex;align-items:center;gap:11px;margin-bottom:6px;">
-            <div style="width:38px;height:38px;border-radius:11px;background:${bgMap[t._type]||'#eee'};
-                        display:flex;align-items:center;justify-content:center;font-size:1.1em;flex-shrink:0;">
-              ${iconMap[t._type]||'💰'}
-            </div>
-            <div style="flex:1;min-width:0;">
-              <div style="font-weight:900;font-size:0.88em;color:var(--text-dark);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-                ${t.category || 'Other'}
+                              padding:11px 14px;margin-bottom:6px;">
+            <div style="display:flex;align-items:center;gap:11px;">
+              <div style="width:38px;height:38px;border-radius:11px;background:${bgMap[t._type]||'#eee'};
+                          display:flex;align-items:center;justify-content:center;font-size:1.1em;flex-shrink:0;">
+                ${iconMap[t._type]||'💰'}
               </div>
-              <div style="font-size:0.73em;color:var(--text-light);font-weight:600;margin-top:2px;">
-                ${d}${t.description ? ' · ' + t.description : ''}
+              <div style="flex:1;min-width:0;">
+                <div style="font-weight:900;font-size:0.88em;color:var(--text-dark);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                  ${t.category || 'Other'}
+                </div>
+                <div style="font-size:0.73em;color:var(--text-light);font-weight:600;margin-top:2px;">
+                  ${d}${t.description ? ' · ' + t.description : ''}
+                </div>
+              </div>
+              <div style="font-weight:900;font-size:0.92em;color:${t._type==='income'?'var(--income)':'var(--expenses)'};flex-shrink:0;">
+                ${t._type==='income'?'+':'-'}${fmt(amt)}
               </div>
             </div>
-            <div style="font-weight:900;font-size:0.92em;color:${t._type==='income'?'var(--income)':'var(--expenses)'};flex-shrink:0;">
-              ${t._type==='income'?'+':'-'}${fmt(amt)}
+            <div style="display:flex;gap:6px;margin-top:8px;justify-content:flex-end;">
+              <button onclick="searchEditTx('${t._month}','${t._type}',${t._idx})"
+                style="background:#F0F4FF;border:none;border-radius:8px;padding:5px 12px;font-size:0.72em;font-weight:800;color:var(--primary);cursor:pointer;">✏️ Edit</button>
+              <button onclick="searchDeleteTx('${t._month}','${t._type}',${t._idx})"
+                style="background:#FFF0F0;border:none;border-radius:8px;padding:5px 12px;font-size:0.72em;font-weight:800;color:var(--expenses);cursor:pointer;">✕ Delete</button>
             </div>
           </div>`;
         }).join('')}
       </div>`
     ).join('');
+}
+
+function searchEditTx(monthKey, type, idx) {
+  // Navigate to the transaction screen and open edit modal directly
+  clearTxSearch();
+  viewMonth = monthKey;
+  calSelectedDay = null;
+  renderTransactions();
+  setTimeout(() => openEditTx(monthKey, type, idx), 150);
+}
+
+function searchDeleteTx(monthKey, type, idx) {
+  const typeMap = {expense:'expenses',income:'income',investment:'investments',debt:'debts',given:'givenToOthers',additional:'additional'};
+  const listKey = typeMap[type];
+  if (!listKey || !data[monthKey] || !data[monthKey][listKey]) return;
+  const tx = data[monthKey][listKey][idx];
+  if (!tx) return;
+  if (!confirm(`Delete "${tx.category}" · ${fmt(Math.abs(tx.amount))}?`)) return;
+  data[monthKey][listKey].splice(idx, 1);
+  save();
+  showToast('🗑 Deleted');
+  // Re-run the current search to refresh results
+  const input = document.getElementById('tx-search-input');
+  if (input && input.value) onTxSearch(input.value);
 }
 
 function clearTxSearch() {
@@ -5671,7 +5738,7 @@ function deleteTx(monthKey, type, idx) {
 // ADD SCREEN (full screen add)
 // ══════════════════════════════════════════════════════
 function renderAddScreen() {
-  document.getElementById('add-date').value = new Date().toISOString().split('T')[0];
+  document.getElementById('add-date').value = localDateStr();
   renderNumpad(); renderSubCats();
 }
 
@@ -5707,7 +5774,7 @@ function updateAmountDisplay() { document.getElementById('add-amount-display').t
 function saveTransaction() {
   const amount=parseFloat(currentAmountStr);
   if(!amount||amount<=0){showToast('Enter an amount',2000);return;}
-  const date=document.getElementById('add-date').value||new Date().toISOString().split('T')[0];
+  const date=document.getElementById('add-date').value||localDateStr();
   const note=document.getElementById('add-note').value.trim();
   const monthKey=getMonthKey(date)||getCurrentMonthKey();
   ensureMonth(monthKey);
@@ -6450,7 +6517,7 @@ function renderMetals() {
   }).join('');
 }
 function addMetalEntry() {
-  const name=document.getElementById('metal-name').value.trim(), grams=parseFloat(document.getElementById('metal-grams').value), price=parseFloat(document.getElementById('metal-price').value)||0, date=document.getElementById('metal-date').value||new Date().toISOString().split('T')[0], form=document.getElementById('metal-form').value, notes=document.getElementById('metal-notes').value.trim(), purity=document.getElementById('metal-purity').value.trim(), occasion=document.getElementById('metal-occasion').value.trim();
+  const name=document.getElementById('metal-name').value.trim(), grams=parseFloat(document.getElementById('metal-grams').value), price=parseFloat(document.getElementById('metal-price').value)||0, date=document.getElementById('metal-date').value||localDateStr(), form=document.getElementById('metal-form').value, notes=document.getElementById('metal-notes').value.trim(), purity=document.getElementById('metal-purity').value.trim(), occasion=document.getElementById('metal-occasion').value.trim();
   if(!name){showToast('Enter a source/name ❌');return;} if(!grams||grams<=0){showToast('Enter a valid weight ❌');return;}
   getMetals().push({metalType:currentMetal,name,grams,price:price||METAL_CONFIG[currentMetal].pricePerGram,date,form,notes,purity,occasion});
   save(); renderMetals();
@@ -6521,7 +6588,7 @@ function renderInvestments() {
   hl.innerHTML=filtered.map(inv=>{const realIdx=investments.indexOf(inv);const cost=Number(inv.shares||0)*Number(inv.cost||0);const val=Number(inv.shares||0)*Number(inv.price||inv.cost||0);const gain=val-cost;const pct=cost>0?gain/cost*100:0;const color=catColors[inv.category]||'#9AA0B2';return`<div class="invest-holding-row"><div class="invest-ticker-badge" style="background:${color}18;color:${color};">${(inv.ticker||'?').toUpperCase()}</div><div class="invest-info"><div class="invest-name">${inv.ticker||'Investment'}</div><div class="invest-detail">${inv.shares} shares · ${inv.broker||''} · ${inv.category||''}</div></div><div class="invest-values"><div class="invest-value">${fmt(val)}</div><div class="invest-gain ${gain>=0?'up':'down'}">${gain>=0?'+':'-'}${fmtFull(Math.abs(gain))} (${pct.toFixed(1)}%)</div></div><button onclick="deleteInvestEntry(${realIdx})" style="background:#FFF0F0;border:none;border-radius:8px;padding:6px 8px;font-size:0.75em;color:var(--expenses);cursor:pointer;margin-left:8px;">✕</button></div>`;}).join('');
 }
 function addInvestEntry() {
-  const ticker=document.getElementById('inv-ticker').value.trim().toUpperCase(), category=document.getElementById('inv-cat').value, shares=parseFloat(document.getElementById('inv-shares').value), cost=parseFloat(document.getElementById('inv-cost').value), price=parseFloat(document.getElementById('inv-price').value)||cost, date=document.getElementById('inv-date').value||new Date().toISOString().split('T')[0], broker=document.getElementById('inv-broker').value.trim();
+  const ticker=document.getElementById('inv-ticker').value.trim().toUpperCase(), category=document.getElementById('inv-cat').value, shares=parseFloat(document.getElementById('inv-shares').value), cost=parseFloat(document.getElementById('inv-cost').value), price=parseFloat(document.getElementById('inv-price').value)||cost, date=document.getElementById('inv-date').value||localDateStr(), broker=document.getElementById('inv-broker').value.trim();
   if(!ticker||!shares||!cost){showToast('Fill in ticker, shares & cost ❌');return;}
   const investments=getInvestments();
   const existing=investments.find(inv=>inv.ticker===ticker&&inv.category===category);
@@ -6995,7 +7062,7 @@ function saveGoal() {
     goalType: document.getElementById('gs-goaltype')?.value || 'grow',
     startBalance: parseFloat(document.getElementById('gs-startbal')?.value) || 0,
     mappedAccounts,
-    createdAt: editId ? (goals.find(g=>g.id===editId)||{}).createdAt : new Date().toISOString().split('T')[0],
+    createdAt: editId ? (goals.find(g=>g.id===editId)||{}).createdAt : localDateStr(),
   };
 
   if (editId) {
@@ -7300,7 +7367,11 @@ function budgetChangeMonth(dir) {
   const [y, m] = budgetViewMonth.split('-').map(Number);
   const d = new Date(y, m - 1 + dir, 1);
   budgetViewMonth = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  viewMonth = budgetViewMonth; // keep global month in sync
   document.getElementById('budget-month-label').textContent = getDisplayMonth(budgetViewMonth);
+  // Update topbar month if visible
+  const topbarMonth = document.getElementById('topbar-month');
+  if (topbarMonth) topbarMonth.textContent = getDisplayMonth(budgetViewMonth);
   renderBudgetModule();
   // If detail pane is open, re-render it for the new month
   if (currentBudgetCatDetail) {
@@ -8649,7 +8720,7 @@ function toggleNWSection(name) {
 function saveNWSnapshot() {
   const nw = computeNetWorth();
   const snaps = getNWSnapshots();
-  const today = new Date().toISOString().split('T')[0];
+  const today = localDateStr();
   // Don't duplicate same-day snapshot, update it
   const existing = snaps.find(s => s.date === today);
   if (existing) { existing.value = nw.netWorth; }
@@ -8764,7 +8835,7 @@ function _nwsBuildForm(type, existing, m) {
   document.getElementById('nw-sheet-body').innerHTML = `
     <div class="nw-sheet-field">
       <div class="nws-section-label">Last Updated</div>
-      <input class="nw-sheet-input" id="nws-date" type="date" value="${existing ? existing.lastUpdated : new Date().toISOString().split('T')[0]}">
+      <input class="nw-sheet-input" id="nws-date" type="date" value="${existing ? existing.lastUpdated : localDateStr()}">
     </div>
     <div class="nw-sheet-field">
       <div class="nws-section-label">Name</div>
@@ -8782,7 +8853,7 @@ function _nwsBuildForm(type, existing, m) {
     </div>
     <div class="nw-sheet-row">
       <div class="nw-sheet-field"><div class="nws-section-label">Area (sq ft / sq m)</div><input class="nw-sheet-input" id="nws-re-area" type="text" placeholder="e.g. 1200 sqft" value="${m.area||''}"></div>
-      <div class="nw-sheet-field"><div class="nws-section-label">Purchase Date</div><input class="nw-sheet-input" id="nws-date" type="date" value="${existing ? existing.lastUpdated : new Date().toISOString().split('T')[0]}"></div>
+      <div class="nw-sheet-field"><div class="nws-section-label">Purchase Date</div><input class="nw-sheet-input" id="nws-date" type="date" value="${existing ? existing.lastUpdated : localDateStr()}"></div>
     </div>
     <div class="nw-sheet-field"><div class="nws-section-label">Description / Address</div><input class="nw-sheet-input" id="nws-re-desc" type="text" placeholder="e.g. 3BR Apartment, Main St" value="${m.description||''}"></div>
     ` : `${showBalance ? `
@@ -8887,7 +8958,7 @@ function saveNWAccount() {
   const notesEl = document.getElementById('nws-notes');
   if (notesEl && notesEl.value) meta.notes = notesEl.value.trim();
   const dateEl = document.getElementById('nws-date');
-  const lastUpdated = dateEl ? dateEl.value : new Date().toISOString().split('T')[0];
+  const lastUpdated = dateEl ? dateEl.value : localDateStr();
 
   if (!data._nwAccounts) data._nwAccounts = [];
   if (nwSheetEditId) {
@@ -9106,7 +9177,7 @@ function buildTxRecords() {
     if (rawDate) {
       // Handle Excel date formats
       const d = new Date(rawDate);
-      if (!isNaN(d)) dateStr = d.toISOString().split('T')[0];
+      if (!isNaN(d)) dateStr = localDateStr(d);
       else dateStr = rawDate.substring(0,10);
     }
     if (!dateStr || dateStr === 'NaN-aN-aN') return;
@@ -9170,7 +9241,7 @@ function processGivenImport(rows, headers) {
     const rawDate = String(row[dateCol]||'').trim();
     const d = new Date(rawDate);
     if (isNaN(d)) return;
-    const dateStr = d.toISOString().split('T')[0];
+    const dateStr = localDateStr(d);
     const monthKey = dateStr.substring(0,7);
     ensureMonth(monthKey);
     const amount = Math.abs(parseFloat(String(row[amtCol]||'0').replace(/[$,]/g,''))||0);
@@ -9310,7 +9381,7 @@ function processMetalsImport(rows, headers) {
       name: itemCol >= 0 ? String(row[itemCol]||'').trim() : metalType,
       grams,
       price: METAL_CONFIG[metalType]?.pricePerGram || 0,
-      date: new Date().toISOString().split('T')[0],
+      date: localDateStr(),
       form: 'Jewelry',
       purity: purityCol >= 0 ? String(row[purityCol]||'').trim() : '',
       occasion: occasionCol >= 0 ? String(row[occasionCol]||'').trim() : '',
@@ -9841,14 +9912,14 @@ function endCoachTour() {
 
 // ══════════════════════════════════════════════════════
 document.getElementById('topbar-month').textContent = getDisplayMonth(viewMonth);
-document.getElementById('metal-date').value = new Date().toISOString().split('T')[0];
-document.getElementById('inv-date').value = new Date().toISOString().split('T')[0];
+document.getElementById('metal-date').value = localDateStr();
+document.getElementById('inv-date').value = localDateStr();
 
 // Apply stored theme
 applyStoredTheme();
 
 // Init period
-selectedDay = new Date().toISOString().split('T')[0];
+selectedDay = localDateStr();
 updatePeriodLabel();
 
 // Render home
