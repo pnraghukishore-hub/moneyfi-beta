@@ -7265,27 +7265,18 @@ function goToBudgetDetail(cardKey) {
     type = 'expense';
   }
 
-  if (goal) {
-    // Budget goal exists — go to budget drill-down
-    goToScreen('budget');
-    setBudgetTab('overview', document.getElementById('btab-overview'));
-    setTimeout(() => {
-      openBudgetCatDetail(type, goal.key);
-      showToast(`📊 ${goal.name || goal.key}`);
-    }, 150);
-  } else {
-    // No budget goal — go straight to transactions, search that category
-    // No intermediate screen — single clean navigation
-    goToScreen('tx');
-    setTimeout(() => {
-      const searchInput = document.getElementById('tx-search-input');
-      if (searchInput) {
-        const searchTerm = subcats[0] || cardLabel;
-        searchInput.value = searchTerm;
-        onTxSearch(searchTerm);
-      }
-    }, 80);
-  }
+  // Always go to transactions with category search — no flash, no intermediate screen
+  // If a budget goal exists, show a banner but stay in transactions
+  goToScreen('tx');
+  setTimeout(() => {
+    const searchInput = document.getElementById('tx-search-input');
+    if (searchInput) {
+      const searchTerm = subcats[0] || cardLabel;
+      searchInput.value = searchTerm;
+      onTxSearch(searchTerm);
+      if (goal) showToast(`📊 ${goal.name || goal.key} · ${fmt((goal.amount||0))} budget`);
+    }
+  }, 80);
 }
 
 // ── Budget swipe gesture ────────────────────────────────────────
