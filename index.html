@@ -3605,7 +3605,7 @@ function renderHome() {
         : (catTotals[card.label]||0);
       const pct = allExp>0 ? Math.min(amt/allExp*100,100) : 0;
       return `<div class="budget-card ${card.cls||'other-cat'}"
-        onclick="openQuickAdd('expense','${subcats[0]||card.label}')"
+        onclick="handleHomeCardClick(event,'expense','${subcats[0]||card.label}')"
         ontouchstart="startHomeLongPress(event,'${card.key||card.label}')"
         ontouchend="clearHomeLongPress()"
         ontouchmove="clearHomeLongPress()"
@@ -7104,17 +7104,28 @@ function renderGoalsPanel() {
 // ── Home card long press → Budget detail ────────────────────────
 let _homeLongPressTimer = null;
 let _homeLongPressKey   = null;
+let _didLongPress       = false; // blocks onclick after long press
 
 function startHomeLongPress(e, cardKey) {
+  _didLongPress = false;
   _homeLongPressKey = cardKey;
   _homeLongPressTimer = setTimeout(() => {
-    clearHomeLongPress();
+    _didLongPress = true;
+    _homeLongPressTimer = null;
+    // Haptic feedback if available
+    if (navigator.vibrate) navigator.vibrate(40);
     goToBudgetDetail(cardKey);
   }, 600);
 }
 
 function clearHomeLongPress() {
   if (_homeLongPressTimer) { clearTimeout(_homeLongPressTimer); _homeLongPressTimer = null; }
+}
+
+function handleHomeCardClick(e, type, subcat) {
+  // Block onclick if long press just fired
+  if (_didLongPress) { _didLongPress = false; return; }
+  openQuickAdd(type, subcat);
 }
 
 function goToBudgetDetail(cardKey) {
