@@ -3800,11 +3800,15 @@ function renderInvestHome(investments) {
   grid.innerHTML = cards.map(card=>{
     const amt = totals[card.key]||0;
     const pct = grandTotal>0?Math.min(amt/grandTotal*100,100):0;
-    return `<div class="invest-cat-card" style="background:${card.bg||'#F8F8F8'};" onclick="closeFabMenu();openQuickAdd('investment','${card.key}')">
+    return `<div class="invest-cat-card" style="background:${card.bg||'#F8F8F8'};user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;"
+      ontouchstart="homeCardTouchStart(event,'${card.key}','investment','${card.key}')"
+      ontouchend="homeCardTouchEnd(event)"
+      ontouchmove="homeCardTouchMove(event)"
+      oncontextmenu="event.preventDefault();goToInvestDetail('${card.key}')">
       <div class="inv-card-icon" style="background:${card.color}22;">${card.icon}</div>
       <div class="inv-card-label">${card.label||card.key}</div>
       <div class="inv-card-amt">${fmt(amt)}</div>
-      <div class="inv-card-units">${amt>0?'Tap to add more':'Tap to start tracking'}</div>
+      <div class="inv-card-units">${amt>0?'Tap to add · Hold to view':'Tap to start tracking'}</div>
       <div class="inv-card-bar"><div class="inv-card-bar-fill" style="width:${pct}%;background:${card.color};"></div></div>
     </div>`;
   }).join('') +
@@ -7228,6 +7232,18 @@ function handleHomeCardClick(e, type, subcat) {
   openQuickAdd(type, subcat);
 }
 
+function goToInvestDetail(cardKey) {
+  // Long press on invest card → go to transactions filtered by that investment type
+  goToScreen('tx');
+  setTimeout(() => {
+    const searchInput = document.getElementById('tx-search-input');
+    if (searchInput) {
+      searchInput.value = cardKey;
+      onTxSearch(cardKey);
+    }
+  }, 80);
+}
+
 function goToBudgetDetail(cardKey) {
   // Find the home card to get its subcategories
   const cards = getHomeSpendCards();
@@ -7250,7 +7266,7 @@ function goToBudgetDetail(cardKey) {
   }
 
   if (goal) {
-    // Budget goal exists — navigate to budget drill-down
+    // Budget goal exists — go to budget drill-down
     goToScreen('budget');
     setBudgetTab('overview', document.getElementById('btab-overview'));
     setTimeout(() => {
@@ -7258,7 +7274,8 @@ function goToBudgetDetail(cardKey) {
       showToast(`📊 ${goal.name || goal.key}`);
     }, 150);
   } else {
-    // No budget goal — navigate to transaction screen, filter by category
+    // No budget goal — go straight to transactions, search that category
+    // No intermediate screen — single clean navigation
     goToScreen('tx');
     setTimeout(() => {
       const searchInput = document.getElementById('tx-search-input');
@@ -7266,9 +7283,8 @@ function goToBudgetDetail(cardKey) {
         const searchTerm = subcats[0] || cardLabel;
         searchInput.value = searchTerm;
         onTxSearch(searchTerm);
-        showToast(`🔍 Showing ${cardLabel} transactions`);
       }
-    }, 150);
+    }, 80);
   }
 }
 
