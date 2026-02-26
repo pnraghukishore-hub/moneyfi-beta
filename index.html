@@ -7251,7 +7251,7 @@ function goToBudgetDetail(cardKey) {
 
   if (goal) {
     // Budget goal exists — navigate to budget drill-down
-    showScreen('budget');
+    goToScreen('budget');
     setBudgetTab('overview', document.getElementById('btab-overview'));
     setTimeout(() => {
       openBudgetCatDetail(type, goal.key);
@@ -7259,12 +7259,10 @@ function goToBudgetDetail(cardKey) {
     }, 150);
   } else {
     // No budget goal — navigate to transaction screen, filter by category
-    showScreen('tx');
+    goToScreen('tx');
     setTimeout(() => {
-      // Use search to filter this category's transactions
       const searchInput = document.getElementById('tx-search-input');
       if (searchInput) {
-        // Search by first subcat or card label
         const searchTerm = subcats[0] || cardLabel;
         searchInput.value = searchTerm;
         onTxSearch(searchTerm);
