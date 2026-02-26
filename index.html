@@ -3609,11 +3609,9 @@ function renderHome() {
         : (catTotals[card.label]||0);
       const pct = allExp>0 ? Math.min(amt/allExp*100,100) : 0;
       return `<div class="budget-card ${card.cls||'other-cat'}"
-        onclick="handleHomeCardClick(event,'expense','${subcats[0]||card.label}')"
-        onpointerdown="startHomeLongPress(event,'${card.key||card.label}')"
-        onpointerup="clearHomeLongPress(event)"
-        onpointercancel="clearHomeLongPress(event)"
-        onpointermove="clearHomeLongPress(event)"
+        ontouchstart="homeCardTouchStart(event,'${card.key||card.label}','expense','${subcats[0]||card.label}')"
+        ontouchend="homeCardTouchEnd(event)"
+        ontouchmove="homeCardTouchMove(event)"
         oncontextmenu="event.preventDefault();goToBudgetDetail('${card.key||card.label}')"
         title="Tap to add · Hold to view transactions">
         <div class="cat-icon" style="background:${card.color}22;">${card.icon}</div>
@@ -7147,36 +7145,57 @@ function renderGoalsPanel() {
 }
 
 // ── Home card long press → Budget detail ────────────────────────
-let _homeLongPressTimer = null;
-let _homeLongPressKey   = null;
+let _homeLongPressTimer  = null;
+let _homeLongPressKey    = null;
 let _homeLongPressStartX = null;
 let _homeLongPressStartY = null;
-let _didLongPress       = false; // blocks onclick after long press
+let _homeLongPressSubcat = null;
+let _homeLongPressType   = null;
+let _didLongPress        = false;
 
-function startHomeLongPress(e, cardKey) {
-  _didLongPress = false;
+// Touch handlers — most reliable on mobile PWA
+function homeCardTouchStart(e, cardKey, type, subcat) {
+  _didLongPress   = false;
   _homeLongPressKey = cardKey;
-  _homeLongPressStartX = e.clientX;
-  _homeLongPressStartY = e.clientY;
-  _homeLongPressTimer = setTimeout(() => {
-    _didLongPress = true;
+  _homeLongPressStartX = e.touches[0].clientX;
+  _homeLongPressStartY = e.touches[0].clientY;
+  _homeLongPressSubcat = subcat;
+  _homeLongPressType   = type;
+  _homeLongPressTimer  = setTimeout(() => {
+    _didLongPress       = true;
     _homeLongPressTimer = null;
-    if (navigator.vibrate) navigator.vibrate(40);
+    if (navigator.vibrate) navigator.vibrate(50);
     goToBudgetDetail(cardKey);
   }, 600);
 }
 
-function clearHomeLongPress(e) {
-  // If pointer moved more than 10px — cancel (user is scrolling)
-  if (e && _homeLongPressStartX !== null) {
-    const dx = Math.abs(e.clientX - _homeLongPressStartX);
-    const dy = Math.abs(e.clientY - _homeLongPressStartY);
-    if (dx < 10 && dy < 10) return; // stationary — don't cancel
+function homeCardTouchMove(e) {
+  if (!_homeLongPressTimer) return;
+  const dx = Math.abs(e.touches[0].clientX - _homeLongPressStartX);
+  const dy = Math.abs(e.touches[0].clientY - _homeLongPressStartY);
+  if (dx > 10 || dy > 10) {
+    // User scrolling — cancel long press
+    clearTimeout(_homeLongPressTimer);
+    _homeLongPressTimer = null;
   }
+}
+
+function homeCardTouchEnd(e) {
+  if (_homeLongPressTimer) {
+    // Timer still pending = short tap → Quick Add
+    clearTimeout(_homeLongPressTimer);
+    _homeLongPressTimer = null;
+    if (!_didLongPress) openQuickAdd(_homeLongPressType, _homeLongPressSubcat);
+  }
+  // If _didLongPress = true, long press already handled — do nothing
+}
+
+function clearHomeLongPress(e) {
   if (_homeLongPressTimer) { clearTimeout(_homeLongPressTimer); _homeLongPressTimer = null; }
 }
 
 function handleHomeCardClick(e, type, subcat) {
+  // Kept for desktop fallback — touch devices use homeCardTouchEnd
   if (_didLongPress) { _didLongPress = false; return; }
   openQuickAdd(type, subcat);
 }
