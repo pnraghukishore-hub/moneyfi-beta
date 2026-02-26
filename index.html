@@ -4443,9 +4443,13 @@ function getActiveCurrencies() {
     });
     (mo.realEstate || []).forEach(e => { if (e.currency) found.add(e.currency.toUpperCase()); });
   });
-  // Always remove display currency — no conversion needed for that
+  // Always remove display currency from transaction-currency list
   found.delete(currentCurrency.code.toUpperCase());
-  // Add display currency's own rate entry only if it's not USD (so user can see it)
+  // But if display is not USD, ADD it back so user can set the USD→DisplayCurrency rate
+  // This is needed for correct NW conversion when accounts are in USD and display is INR etc.
+  if (currentCurrency.code.toUpperCase() !== 'USD') {
+    found.add(currentCurrency.code.toUpperCase());
+  }
   return [...found].sort();
 }
 
@@ -4456,9 +4460,9 @@ function renderFXRatesPanel() {
   const displayCode = currentCurrency.code.toUpperCase();
   const activeCurrencies = getActiveCurrencies();
 
-  // Update base label and badge
+  // Update base label and badge — show "1 USD = X {display}" context
   const baseLabel = document.getElementById('fx-base-label');
-  if (baseLabel) baseLabel.textContent = displayCode;
+  if (baseLabel) baseLabel.textContent = displayCode === 'USD' ? 'USD' : `USD → ${displayCode}`;
   const badge = document.getElementById('fx-override-badge');
   const clearAllBtn = document.getElementById('fx-clear-all-btn');
   const hasAnyOverride = Object.keys(overrides).length > 0;
@@ -6281,11 +6285,16 @@ function renderMetals() {
     totals[t]={entries,grams:grams+nwGrams,usd:usd+nwUsd,avgCost:(grams+nwGrams)>0?(usd+nwUsd)/(grams+nwGrams):0};
   });
   const grandTotal=Object.values(totals).reduce((s,t)=>s+t.usd,0);
-  document.getElementById('metals-grand-total').textContent=fmt(grandTotal);
-  Object.keys(cfg).forEach(t=>{document.getElementById('mini-'+t+'-grams').textContent=totals[t].grams.toFixed(2)+' g';document.getElementById('mini-'+t+'-usd').textContent=fmt(totals[t].usd);});
+  // Convert USD totals to display currency for rendering
+  const grandTotalDisp = convertAmt(grandTotal, 'USD');
+  document.getElementById('metals-grand-total').textContent=fmt(grandTotalDisp);
+  Object.keys(cfg).forEach(t=>{
+    document.getElementById('mini-'+t+'-grams').textContent=totals[t].grams.toFixed(2)+' g';
+    document.getElementById('mini-'+t+'-usd').textContent=fmt(convertAmt(totals[t].usd,'USD'));
+  });
   const active=totals[currentMetal], ac=cfg[currentMetal];
   document.getElementById('metal-detail-grams').textContent=active.grams.toFixed(3)+' g · '+(active.grams/31.1035).toFixed(3)+' oz';
-  document.getElementById('metal-detail-usd').textContent=fmt(active.usd);
+  document.getElementById('metal-detail-usd').textContent=fmt(convertAmt(active.usd,'USD'));
   document.getElementById('metal-stat-entries').textContent=active.entries.length;
   document.getElementById('metal-stat-oz').textContent=(active.grams/31.1035).toFixed(3);
   document.getElementById('metal-stat-avg').textContent=active.avgCost>0?'$'+active.avgCost.toFixed(2):'$0';
@@ -6327,7 +6336,7 @@ function renderMetals() {
         <div class="metal-holding-bottom">${grams.toFixed(2)}g · ${oz}oz ${priceTag}${m.occasion?' · '+m.occasion:''}${m.notes?' · '+m.notes:''}${sourceTag}</div>
       </div>
       <div class="metal-holding-right">
-        <div class="metal-holding-value">${fmt(usdVal)}</div>
+        <div class="metal-holding-value">${fmt(convertAmt(usdVal,'USD'))}</div>
         <div class="metal-holding-weight">${grams.toFixed(2)} g</div>
       </div>
       ${delBtn}
@@ -7766,9 +7775,15 @@ function getRealEstateAssets() {
 function nwConvert(balance, currency) {
   const b = Number(balance || 0);
   const c = (currency || currentCurrency.code).toUpperCase();
-  if (c === currentCurrency.code) return b;
-  // Use existing convertAmt helper via a fake entry
-  return convertAmt(b, c);
+  const dispCode = currentCurrency.code.toUpperCase();
+  if (c === dispCode) return b;
+  // Convert: amount in currency C → display currency
+  // All rates are stored as "1 USD = N units of currency"
+  const overrides = data._fxOverrides || {};
+  const fromRate = overrides[c]        ?? FX_USD_BASE[c]        ?? 1; // 1 USD = fromRate C
+  const toRate   = overrides[dispCode] ?? FX_USD_BASE[dispCode] ?? 1; // 1 USD = toRate display
+  // b / fromRate = USD value → * toRate = display value
+  return (b / fromRate) * toRate;
 }
 
 // ── Compute net worth from accounts ──
@@ -7846,11 +7861,13 @@ function computeNetWorth() {
     if (t === 'metals' && acc.meta && acc.meta.grams) {
       const metalType = acc.meta.metalType || 'gold';
       const purity    = acc.meta.purity || '';
-      const calcPrice = getPriceForMetal(metalType, purity);
-      const calcVal   = Number(acc.meta.grams) * calcPrice;
+      const calcPrice = getPriceForMetal(metalType, purity); // always USD/gram
+      const calcValUSD = Number(acc.meta.grams) * calcPrice; // always USD
+      // Convert calcVal from USD to display currency
+      const calcVal = nwConvert(calcValUSD, 'USD');
       // Use calculated value if no explicit balance, or if explicit balance is 0
       if (!Number(acc.balance) || acc._imported) val = calcVal;
-      else val = Math.max(Number(acc.balance) || 0, calcVal); // take the stored balance if explicitly set and > 0
+      else val = Math.max(nwConvert(Number(acc.balance), acc.currency || 'USD'), calcVal);
     }
     byType[t].total += val;
     byType[t].accounts.push({ ...acc, _val: val });
