@@ -1446,6 +1446,10 @@
       background:none;border:none;font-size:1em;cursor:pointer;color:var(--text-light);
       font-weight:900;padding:2px 6px;">✕</button>
   </div>
+  <!-- Author filter chips — shown only in family mode (>1 author in month) -->
+  <div id="author-filter-strip" style="display:none;margin-bottom:8px;">
+    <div class="author-chips" id="author-chips-row"></div>
+  </div>
   <!-- Search Results (hidden when not searching) -->
   <div id="tx-search-results" style="display:none;"></div>
 
@@ -3607,9 +3611,9 @@ function renderHome() {
       return `<div class="budget-card ${card.cls||'other-cat'}"
         onclick="handleHomeCardClick(event,'expense','${subcats[0]||card.label}')"
         onpointerdown="startHomeLongPress(event,'${card.key||card.label}')"
-        onpointerup="clearHomeLongPress()"
-        onpointercancel="clearHomeLongPress()"
-        onpointermove="clearHomeLongPress()"
+        onpointerup="clearHomeLongPress(event)"
+        onpointercancel="clearHomeLongPress(event)"
+        onpointermove="clearHomeLongPress(event)"
         oncontextmenu="event.preventDefault();goToBudgetDetail('${card.key||card.label}')"
         title="Tap to add · Hold to view transactions">
         <div class="cat-icon" style="background:${card.color}22;">${card.icon}</div>
@@ -4946,7 +4950,35 @@ function fmtShort(n) {
   return n.toFixed(0);
 }
 
+function renderAuthorChips() {
+  const strip = document.getElementById('author-filter-strip');
+  const row   = document.getElementById('author-chips-row');
+  if (!strip || !row) return;
+
+  // Gather all authors across current month
+  const m = data[viewMonth] || {};
+  const allEntries = [
+    ...(m.expenses||[]), ...(m.income||[]), ...(m.investments||[]),
+    ...(m.debts||[]), ...(m.givenToOthers||[]), ...(m.additional||[])
+  ];
+  const authors = [...new Set(allEntries.map(e => e._addedBy).filter(Boolean))];
+
+  if (authors.length <= 1) {
+    strip.style.display = 'none';
+    _authorFilter = 'all'; // reset when only one author
+    return;
+  }
+
+  strip.style.display = '';
+  const chips = ['all', ...authors].map(a =>
+    `<div class="author-chip ${_authorFilter===a?'active':''}"
+      onclick="setAuthorFilter('${a}')">${a==='all'?'👥 All':a}</div>`
+  ).join('');
+  row.innerHTML = chips;
+}
+
 function renderTransactions() {
+  renderAuthorChips();
   ensureMonth(viewMonth);
   const m = data[viewMonth];
   const today = new Date().toISOString().split('T')[0];
@@ -5375,7 +5407,7 @@ function closeRecDeleteModal() {
 // ── Author Filter ───────────────────────────────────────────────
 function setAuthorFilter(author) {
   _authorFilter = author;
-  renderTransactions();
+  renderTransactions(); // re-renders chips + day detail
 }
 
 // ── Transaction Search ──────────────────────────────────────────
@@ -5540,16 +5572,6 @@ function renderCalDayDetail(allTx) {
         ${dayOut>0?`<div style="flex:1;background:#FFF0F0;border-radius:10px;padding:8px 10px;text-align:center;"><div style="font-size:0.68em;font-weight:800;color:var(--expenses);margin-bottom:2px;">OUT</div><div style="font-weight:900;font-size:0.95em;color:var(--expenses);">−${fmt(dayOut)}</div></div>`:''}
       </div>
     </div>
-
-    <!-- Author filter chips — only shown when >1 author in this day's transactions -->
-    ${(()=>{
-      const authors = [...new Set(dayTx.map(t => t._addedBy).filter(Boolean))];
-      if (authors.length <= 1) return '';
-      const chips = ['all', ...authors].map(a =>
-        `<div class="author-chip ${_authorFilter===a?'active':''}" onclick="setAuthorFilter('${a}')">${a==='all'?'👥 All':a}</div>`
-      ).join('');
-      return `<div class="author-chips">${chips}</div>`;
-    })()}
 
     <!-- Transaction rows — view only, ✕ to delete -->
     <div style="display:flex;flex-direction:column;gap:8px;">
@@ -7117,26 +7139,34 @@ function renderGoalsPanel() {
 // ── Home card long press → Budget detail ────────────────────────
 let _homeLongPressTimer = null;
 let _homeLongPressKey   = null;
+let _homeLongPressStartX = null;
+let _homeLongPressStartY = null;
 let _didLongPress       = false; // blocks onclick after long press
 
 function startHomeLongPress(e, cardKey) {
   _didLongPress = false;
   _homeLongPressKey = cardKey;
+  _homeLongPressStartX = e.clientX;
+  _homeLongPressStartY = e.clientY;
   _homeLongPressTimer = setTimeout(() => {
     _didLongPress = true;
     _homeLongPressTimer = null;
-    // Haptic feedback if available
     if (navigator.vibrate) navigator.vibrate(40);
     goToBudgetDetail(cardKey);
   }, 600);
 }
 
-function clearHomeLongPress() {
+function clearHomeLongPress(e) {
+  // If pointer moved more than 10px — cancel (user is scrolling)
+  if (e && _homeLongPressStartX !== null) {
+    const dx = Math.abs(e.clientX - _homeLongPressStartX);
+    const dy = Math.abs(e.clientY - _homeLongPressStartY);
+    if (dx < 10 && dy < 10) return; // stationary — don't cancel
+  }
   if (_homeLongPressTimer) { clearTimeout(_homeLongPressTimer); _homeLongPressTimer = null; }
 }
 
 function handleHomeCardClick(e, type, subcat) {
-  // Block onclick if long press just fired
   if (_didLongPress) { _didLongPress = false; return; }
   openQuickAdd(type, subcat);
 }
