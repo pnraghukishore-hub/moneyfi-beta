@@ -1637,6 +1637,43 @@
     <div class="metal-stat-box"><div class="metal-stat-box-val" id="metal-stat-oz">0</div><div class="metal-stat-box-lbl">Troy Oz</div></div>
     <div class="metal-stat-box"><div class="metal-stat-box-val" id="metal-stat-avg">$0</div><div class="metal-stat-box-lbl">Avg Cost/g</div></div>
   </div>
+  <!-- ROI Performance Card -->
+  <div id="metal-roi-card" style="background:var(--white);border-radius:var(--radius);box-shadow:var(--card-shadow);margin-bottom:14px;overflow:hidden;">
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px 10px;">
+      <div style="font-weight:900;font-size:0.92em;color:var(--text-dark);">📈 Portfolio Performance</div>
+      <div id="metal-roi-gain-badge" style="font-size:0.78em;font-weight:800;padding:3px 10px;border-radius:20px;background:#D1FAE5;color:#10B981;">+0%</div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0;border-top:1px solid #F5F5F5;">
+      <div style="text-align:center;padding:10px 6px;border-right:1px solid #F5F5F5;">
+        <div style="font-size:0.68em;font-weight:800;color:var(--text-light);text-transform:uppercase;">Cost Basis</div>
+        <div style="font-weight:900;font-size:0.95em;color:var(--text-dark);" id="metal-roi-cost">$0</div>
+      </div>
+      <div style="text-align:center;padding:10px 6px;border-right:1px solid #F5F5F5;">
+        <div style="font-size:0.68em;font-weight:800;color:var(--text-light);text-transform:uppercase;">Market Value</div>
+        <div style="font-weight:900;font-size:0.95em;color:#F59E0B;" id="metal-roi-value">$0</div>
+      </div>
+      <div style="text-align:center;padding:10px 6px;">
+        <div style="font-size:0.68em;font-weight:800;color:var(--text-light);text-transform:uppercase;">Gain / Loss</div>
+        <div style="font-weight:900;font-size:0.95em;" id="metal-roi-gain">$0</div>
+      </div>
+    </div>
+    <!-- Cost vs Value bar -->
+    <div style="padding:12px 16px 14px;">
+      <div style="font-size:0.68em;font-weight:800;color:var(--text-light);text-transform:uppercase;margin-bottom:6px;">Cost vs Live Value</div>
+      <div style="position:relative;height:20px;background:#F5F5F5;border-radius:10px;overflow:hidden;">
+        <div id="metal-roi-bar-cost" style="position:absolute;left:0;top:0;height:100%;background:#94A3B8;border-radius:10px;transition:width 0.5s ease;"></div>
+        <div id="metal-roi-bar-value" style="position:absolute;left:0;top:0;height:100%;background:linear-gradient(90deg,#F59E0B,#FBBF24);border-radius:10px;opacity:0.85;transition:width 0.5s ease;"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-top:4px;">
+        <div style="display:flex;align-items:center;gap:4px;"><div style="width:8px;height:8px;border-radius:2px;background:#94A3B8;"></div><div style="font-size:0.65em;font-weight:700;color:var(--text-light);">Cost</div></div>
+        <div style="display:flex;align-items:center;gap:4px;"><div style="font-size:0.65em;font-weight:700;color:var(--text-light);">Live Value</div><div style="width:8px;height:8px;border-radius:2px;background:#F59E0B;"></div></div>
+      </div>
+      <!-- Cumulative acquisition chart by date -->
+      <div style="font-size:0.68em;font-weight:800;color:var(--text-light);text-transform:uppercase;margin:12px 0 6px;">Acquisition Over Time</div>
+      <canvas id="metal-roi-canvas" height="70" style="width:100%;display:block;border-radius:8px;"></canvas>
+    </div>
+  </div>
+
   <div class="metal-add-panel">
     <div class="metal-add-panel-header" onclick="toggleAddPanel()">
       <div class="metal-add-panel-title"><span id="metal-add-icon">🥇</span> Add <span id="metal-add-label">Gold</span> Entry</div>
@@ -4155,19 +4192,24 @@ function qaSave() {
   // F: If metal investment — auto-create matching _metals portfolio entry
   if (isMetal && entry.metalGrams && entry.metalGrams > 0) {
     if (!data._metals) data._metals = [];
+    // Stable link ID so both entries can find each other regardless of array shifts
+    const _qaLinkId = 'qal_' + Date.now() + '_' + Math.random().toString(36).slice(2,6);
+    // Tag the investment entry with the link ID
+    const invArr = data[monthKey][typeMap[qaType]];
+    if (invArr.length > 0) invArr[invArr.length - 1]._qaLinkId = _qaLinkId;
     const metalEntry = {
       metalType: entry.metalType || 'gold',
-      name: entry.category || entry.metalType || 'Gold',
+      name: entry.description || (entry.category && entry.category !== entry.metalType ? entry.category : null) || (METAL_CONFIG[entry.metalType||'gold']||{}).label || 'Gold',
       grams: entry.metalGrams,
-      price: amount / entry.metalGrams, // price per gram in original currency
+      price: amount / entry.metalGrams,
       purity: '',
       date: entry.date,
       form: 'Purchase',
       notes: entry.description || '',
       _fromQA: true,
-      _fromMonth: monthKey,  // e.g. "2026-02"
+      _fromMonth: monthKey,
       _fromQAMonth: monthKey,
-      _fromQAIdx: (data[monthKey][typeMap[qaType]].length - 1), // last pushed entry
+      _qaLinkId, // stable — survives array mutations
     };
     data._metals.push(metalEntry);
     save();
@@ -4223,6 +4265,7 @@ function qaSave() {
   showToast(toastMsg);
   if(monthKey === viewMonth) renderHome();
   renderTransactions();
+  if (isMetal) { renderMetals(); renderNetWorth(); } // propagate to metals & NW immediately
 }
 
 // ══════════════════════════════════════════════════════
@@ -5660,10 +5703,15 @@ function searchDeleteTx(monthKey, type, idx) {
   const tx = data[monthKey][listKey][idx];
   if (!tx) return;
   if (!confirm(`Delete "${tx.category}" · ${fmt(Math.abs(tx.amount))}?`)) return;
+  // If metal-linked — also remove the _metals entry
+  if (tx._qaLinkId && data._metals) {
+    const mi = data._metals.findIndex(m => m._qaLinkId === tx._qaLinkId);
+    if (mi >= 0) data._metals.splice(mi, 1);
+  }
   data[monthKey][listKey].splice(idx, 1);
   save();
+  renderHome(); renderMetals(); renderNetWorth();
   showToast('🗑 Deleted');
-  // Re-run the current search to refresh results
   const input = document.getElementById('tx-search-input');
   if (input && input.value) onTxSearch(input.value);
 }
@@ -5680,15 +5728,19 @@ function listEditTx(monthKey, type, idx) {
   setTimeout(() => openEditTx(monthKey, type, idx), 200);
 }
 function listDeleteTx(monthKey, type, idx) {
-  // 2b: Delete from list view
   const typeMap = {expense:'expenses',income:'income',investment:'investments',debt:'debts',given:'givenToOthers',additional:'additional'};
   const listKey = typeMap[type];
   if (!data[monthKey] || !data[monthKey][listKey]) return;
   const tx = data[monthKey][listKey][idx];
   if (!tx) return;
   if (!confirm(`Delete "${tx.category}" · ${fmt(Math.abs(tx.amount))}?`)) return;
+  // If metal-linked — also remove the _metals entry
+  if (tx._qaLinkId && data._metals) {
+    const mi = data._metals.findIndex(m => m._qaLinkId === tx._qaLinkId);
+    if (mi >= 0) data._metals.splice(mi, 1);
+  }
   data[monthKey][listKey].splice(idx, 1);
-  save(); renderHome();
+  save(); renderHome(); renderMetals(); renderNetWorth();
   showToast('🗑 Deleted');
   const lv = document.getElementById('cal-list-view');
   if (lv && lv.style.display !== 'none') renderCalListView(lv);
@@ -5806,8 +5858,16 @@ function setTxFilter(filter, el) { /* legacy – no-op in calendar view */ }
 function deleteTx(monthKey, type, idx) {
   if(!confirm('Delete this transaction?')) return;
   const typeMap={expense:'expenses',income:'income',investment:'investments',debt:'debts',given:'givenToOthers',additional:'additional'};
-  data[monthKey][typeMap[type]].splice(idx,1);
-  save(); renderTransactions(); renderHome(); showToast('Transaction deleted');
+  const listKey = typeMap[type];
+  const tx = data[monthKey] && data[monthKey][listKey] && data[monthKey][listKey][idx];
+  // If metal-linked investment — also remove the paired _metals entry
+  if (tx && tx._qaLinkId && data._metals) {
+    const mi = data._metals.findIndex(m => m._qaLinkId === tx._qaLinkId);
+    if (mi >= 0) data._metals.splice(mi, 1);
+  }
+  data[monthKey][listKey].splice(idx,1);
+  save(); renderTransactions(); renderHome(); renderMetals(); renderNetWorth();
+  showToast('🗑 Transaction deleted');
 }
 
 // ══════════════════════════════════════════════════════
@@ -6564,6 +6624,7 @@ function renderMetals() {
   ];
   // Issue 6: Sort newest first
   allEntries.sort((a,b) => (b.date||'').localeCompare(a.date||''));
+  renderMetalROI(); // ROI chart
   document.getElementById('holdings-list-count').textContent = allEntries.length + (allEntries.length===1?' entry':' entries');
   if(allEntries.length===0){hl.innerHTML=`<div class="metal-empty"><div class="metal-empty-icon">${ac.emoji}</div><div class="metal-empty-text">No ${ac.label.toLowerCase()} entries yet.<br>Tap + above to add one.</div></div>`;return;}
   // Issue 8: Group entries by date — no-date at bottom with friendly label
@@ -6579,7 +6640,7 @@ function renderMetals() {
 
   let holdingHtml = '';
   dateGroupKeys.forEach(dk => {
-    const groupLabel = new Date(dk+'T00:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'2-digit'});
+    const groupLabel = new Date(dk+'T00:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'});
     holdingHtml += `<div style="font-size:0.72em;font-weight:800;color:var(--text-light);padding:8px 20px 2px;text-transform:uppercase;letter-spacing:0.04em;background:#FAFAFA;border-bottom:1px solid #F0F0F0;">${groupLabel}</div>`;
     byDateGroup[dk].forEach((m,idx) => {
       holdingHtml += renderMetalHoldingRow(m, allEntries.indexOf(m));
@@ -6592,6 +6653,113 @@ function renderMetals() {
     });
   }
   hl.innerHTML = holdingHtml;
+}
+
+function renderMetalROI() {
+  const entries = getMetals().filter(m => m.metalType === currentMetal);
+  if (!entries.length) {
+    const card = document.getElementById('metal-roi-card');
+    if (card) card.style.display = 'none';
+    return;
+  }
+  const card = document.getElementById('metal-roi-card');
+  if (card) card.style.display = '';
+
+  // Compute cost basis (entries with stored price) and live value
+  let totalCostUSD = 0, totalValueUSD = 0;
+  entries.forEach(m => {
+    const g = Number(m.grams || m.weightGms || 0);
+    const purchasePricePerG = Number(m.price || 0);
+    const livePrice = getPriceForMetal(currentMetal, m.purity || '');
+    if (purchasePricePerG > 0) totalCostUSD += g * purchasePricePerG;
+    totalValueUSD += g * livePrice;
+  });
+  const entriesWithCost = entries.filter(m => Number(m.price || 0) > 0);
+  if (entriesWithCost.length === 0) totalCostUSD = totalValueUSD; // no cost data = no gain display
+
+  const gainUSD = totalValueUSD - totalCostUSD;
+  const gainPct = totalCostUSD > 0 ? gainUSD / totalCostUSD * 100 : 0;
+  const gainColor = gainUSD >= 0 ? '#10B981' : '#EF4444';
+  const gainBg   = gainUSD >= 0 ? '#D1FAE5' : '#FEE2E2';
+
+  // Update tiles
+  const costEl  = document.getElementById('metal-roi-cost');
+  const valEl   = document.getElementById('metal-roi-value');
+  const gainEl  = document.getElementById('metal-roi-gain');
+  const badgeEl = document.getElementById('metal-roi-gain-badge');
+  if (costEl)  costEl.textContent  = fmt(convertAmt(totalCostUSD, 'USD'));
+  if (valEl)   valEl.textContent   = fmt(convertAmt(totalValueUSD, 'USD'));
+  if (gainEl)  { gainEl.textContent = (gainUSD >= 0 ? '+' : '') + fmt(convertAmt(gainUSD, 'USD')); gainEl.style.color = gainColor; }
+  if (badgeEl) { badgeEl.textContent = (gainPct >= 0 ? '+' : '') + gainPct.toFixed(1) + '%'; badgeEl.style.background = gainBg; badgeEl.style.color = gainColor; }
+
+  // Progress bar — cost as grey, value as gold overlay
+  const maxVal = Math.max(totalCostUSD, totalValueUSD);
+  const costBar  = document.getElementById('metal-roi-bar-cost');
+  const valueBar = document.getElementById('metal-roi-bar-value');
+  if (costBar)  costBar.style.width  = maxVal > 0 ? (totalCostUSD  / maxVal * 100) + '%' : '0%';
+  if (valueBar) valueBar.style.width = maxVal > 0 ? (totalValueUSD / maxVal * 100) + '%' : '0%';
+
+  // Acquisition over time chart — cumulative grams by date
+  const dated = entries.filter(m => m.date).sort((a,b) => a.date.localeCompare(b.date));
+  if (!dated.length) return;
+
+  const canvas = document.getElementById('metal-roi-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.offsetWidth || 300;
+  canvas.width = W * (window.devicePixelRatio || 1);
+  canvas.height = 70 * (window.devicePixelRatio || 1);
+  ctx.scale(window.devicePixelRatio || 1, window.devicePixelRatio || 1);
+
+  // Build cumulative grams timeline
+  let cumGrams = 0;
+  const points = dated.map(m => {
+    cumGrams += Number(m.grams || m.weightGms || 0);
+    return { date: m.date, grams: cumGrams };
+  });
+
+  const minG = 0, maxG = points[points.length - 1].grams;
+  const padL = 0, padR = 0, padT = 8, padB = 0;
+  const chartW = W - padL - padR;
+  const chartH = 70 - padT - padB;
+
+  const xScale = (i) => padL + (i / (points.length - 1 || 1)) * chartW;
+  const yScale = (g) => padT + chartH - (maxG > 0 ? (g / maxG) * chartH : 0);
+
+  // Gradient fill
+  const grad = ctx.createLinearGradient(0, padT, 0, padT + chartH);
+  grad.addColorStop(0, 'rgba(245,158,11,0.35)');
+  grad.addColorStop(1, 'rgba(245,158,11,0.03)');
+
+  ctx.beginPath();
+  points.forEach((p, i) => {
+    const x = xScale(i), y = yScale(p.grams);
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.lineTo(xScale(points.length - 1), padT + chartH);
+  ctx.lineTo(xScale(0), padT + chartH);
+  ctx.closePath();
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  // Line
+  ctx.beginPath();
+  points.forEach((p, i) => {
+    const x = xScale(i), y = yScale(p.grams);
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.strokeStyle = '#F59E0B';
+  ctx.lineWidth = 2.5;
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  ctx.stroke();
+
+  // End dot
+  const lastX = xScale(points.length - 1), lastY = yScale(points[points.length - 1].grams);
+  ctx.beginPath();
+  ctx.arc(lastX, lastY, 4, 0, Math.PI * 2);
+  ctx.fillStyle = '#F59E0B';
+  ctx.fill();
 }
 
 function renderMetalHoldingRow(m, idx) {
@@ -6607,7 +6775,7 @@ function renderMetalHoldingRow(m, idx) {
   const sourceTag = m._source==='networth' ? `<span style="font-size:0.7em;color:var(--text-light);"> · 📊 NW</span>` : '';
   const paidCostUSD = (m.price && m.price > 0) ? m.price * grams : 0;
   const paidTag = paidCostUSD > 0 ? `<div style="font-size:0.7em;color:#7C3AED;font-weight:700;margin-top:1px;">paid ${fmt(convertAmt(paidCostUSD,'USD'))}</div>` : '';
-  const fromMonthLabel = m._fromMonth ? new Date(m._fromMonth+'-01').toLocaleDateString('en-US',{month:'short',year:'2-digit'}) : '';
+  const fromMonthLabel = m._fromMonth ? (()=>{ const d=new Date(m._fromMonth+'-01'); return d.toLocaleDateString('en-US',{month:'short'})+" '"+String(d.getFullYear()).slice(2); })() : '';
   const qaTag = m._fromQA ? `<span style="font-size:0.65em;background:#EDE9FE;color:#7C3AED;border-radius:4px;padding:2px 6px;margin-left:4px;font-weight:700;">📱 ${fromMonthLabel}</span>` : '';
   const delBtn = m._source==='networth'
     ? `<button class="metal-holding-del" onclick="navigateTo('networth')" title="Manage in Net Worth">↗️</button>`
@@ -6644,25 +6812,39 @@ function deleteMetalEntry(idx) {
   if (idx < 0 || idx >= (data._metals||[]).length) { showToast('Cannot find entry ❌'); return; }
   if (!confirm('Delete this metal entry?')) return;
   const entry = data._metals[idx];
-  // D: If linked to a QA investment transaction, delete that too
-  if (entry && entry._fromQAMonth && entry._fromQAIdx !== undefined) {
+  // Use stable _qaLinkId to find and delete linked investment tx
+  if (entry && entry._qaLinkId) {
     const mk = entry._fromQAMonth;
-    if (data[mk] && data[mk].investments) {
-      data[mk].investments.splice(entry._fromQAIdx, 1);
+    if (mk && data[mk] && data[mk].investments) {
+      const invIdx = data[mk].investments.findIndex(t => t._qaLinkId === entry._qaLinkId);
+      if (invIdx >= 0) data[mk].investments.splice(invIdx, 1);
     }
   }
   data._metals.splice(idx, 1);
-  save(); renderMetals(); renderNetWorth();
-  showToast('🗑 Entry deleted');
+  save();
+  // Refresh all affected views
+  renderMetals();
+  renderNetWorth();
+  renderHome();
+  renderTransactions();
+  showToast('🗑 Entry deleted from Metals, Investing & NW');
 }
 
 // Delete an imported metal entry directly from NW screen
 function deleteImportedMetal(idx) {
   if (!confirm('Delete this metal entry?')) return;
   if (!data._metals || !data._metals[idx]) return;
+  const entry = data._metals[idx];
+  if (entry && entry._qaLinkId) {
+    const mk = entry._fromQAMonth;
+    if (mk && data[mk] && data[mk].investments) {
+      const invIdx = data[mk].investments.findIndex(t => t._qaLinkId === entry._qaLinkId);
+      if (invIdx >= 0) data[mk].investments.splice(invIdx, 1);
+    }
+  }
   data._metals.splice(idx, 1);
-  save(); renderNetWorth(); renderMetals();
-  showToast('✅ Metal entry deleted');
+  save(); renderNetWorth(); renderMetals(); renderHome(); renderTransactions();
+  showToast('🗑 Metal entry deleted');
 }
 
 // Open edit sheet for an imported metal entry from NW screen
@@ -8403,7 +8585,7 @@ function buildNWMetalsBody(accounts, cfg, addBtnLabel) {
         const displayName = occasion
           ? (originalName && originalName.toLowerCase() !== mt ? occasion + ' · ' + originalName : occasion)
           : (originalName && originalName.toLowerCase() !== mt ? originalName : acc.name);
-        const dateStr = acc.lastUpdated ? new Date(acc.lastUpdated+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'2-digit'}) : '';
+        const dateStr = acc.lastUpdated ? new Date(acc.lastUpdated+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '';
         // For imported metals — use _metals array index for edit/delete
         const metalIdx = acc.id.replace('import_metal_','');
         const editBtn = acc._imported
@@ -8515,7 +8697,7 @@ function renderNetWorth() {
     if (snapListEl) {
       const maxVal = Math.max(...snaps.map(s => s.value), 1);
       snapListEl.innerHTML = snaps.map((s, i) => {
-        const d = new Date(s.date+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'2-digit'});
+        const d = new Date(s.date+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
         const pct = (s.value / maxVal * 100).toFixed(0);
         return `<div class="nw-snap-row">
           <div class="nw-snap-date">${d}</div>
