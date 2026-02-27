@@ -3335,7 +3335,9 @@ function updateMetalPriceOverride(metalType, price, purity) {
   save();
   renderMetals();
   renderNetWorth();
-  renderPurityPrices(metalType);
+  // Re-render purity prices in panel (if still open for per-purity Set buttons)
+  const panel = document.getElementById('metal-price-override-panel');
+  if (panel && panel.style.display !== 'none') renderPurityPrices(metalType);
   showToast('✅ Price updated — Net Worth recalculated!');
 }
 
@@ -3351,7 +3353,9 @@ function resetMetalPriceOverride(metalType, purity) {
     });
   }
   save(); renderMetals(); renderNetWorth();
-  renderPurityPrices(metalType);
+  // Close price panel after reset too
+  const _rp = document.getElementById('metal-price-override-panel');
+  if (_rp) _rp.style.display = 'none';
   showToast('Price reset to default');
 }
 
@@ -6591,8 +6595,7 @@ function renderMetals() {
 }
 
 function renderMetalHoldingRow(m, idx) {
-  hl=hl||document.getElementById('metals-holdings-list'); // just for scope — not used
-  // Re-declare locals (same as map function below)
+  // Standalone helper — uses currentMetal from outer scope
   const ac = METAL_CONFIG[currentMetal];
   const grams=Number(m.grams||m.weightGms||0);
   const purity = m.purity||'';
@@ -6627,46 +6630,6 @@ function renderMetalHoldingRow(m, idx) {
       ${delBtn}
     </div>`;
 }
-
-// ── Old map-based render replaced by grouped render above ──
-function _DEAD_renderMetalHoldings_allEntries_map() {
-  hl.innerHTML=allEntries.map((m,idx)=>{
-    const grams=Number(m.grams||m.weightGms||0);
-    const purity = m.purity||'';
-    // Always show live price per gram (purchase price shown separately as avg cost)
-    const price = getPriceForMetal(currentMetal, purity);
-    const usdVal=grams*price;
-    const oz=(grams/31.1035).toFixed(3);
-    const purityTag = purity ? `<span style="background:#F5F5F5;border-radius:5px;padding:1px 6px;font-size:0.75em;font-weight:700;color:#7C3AED;">${purity}</span>` : '';
-    const priceTag = `<span style="color:var(--text-light);font-size:0.75em;">$${price.toFixed(2)}/g <span style="color:#10B981;font-size:0.85em;font-weight:800;">live</span></span>`;
-    const paidCostUSD = (m.price && m.price > 0) ? m.price * grams : 0;
-    const paidTag = paidCostUSD > 0 ? `<div style="font-size:0.7em;color:#7C3AED;font-weight:700;margin-top:1px;">paid ${fmt(convertAmt(paidCostUSD,'USD'))}</div>` : '';
-    // Issue 8: qaTag kept minimal — date grouping handles the visual context
-    const fromMonthLabel = m._fromMonth ? new Date(m._fromMonth+'-01').toLocaleDateString('en-US',{month:'short',year:'2-digit'}) : '';
-    const qaTag = m._fromQA ? `<span style="font-size:0.65em;background:#EDE9FE;color:#7C3AED;border-radius:4px;padding:2px 6px;margin-left:4px;font-weight:700;">📱 ${fromMonthLabel}</span>` : '';
-    const sourceTag = m._source==='networth' ? `<span style="font-size:0.7em;color:var(--text-light);"> · 📊 NW</span>` : '';
-    const delBtn = m._source==='networth'
-      ? `<button class="metal-holding-del" onclick="navigateTo('networth')" title="Manage in Net Worth">↗️</button>`
-      : `<button class="metal-holding-del" onclick="deleteMetalEntry(${m._metalIdx})" title="Delete">✕</button>`;
-    return `<div class="metal-holding-item">
-      <div class="metal-holding-badge ${currentMetal}">${ac.emoji}</div>
-      <div class="metal-holding-main">
-        <div class="metal-holding-top">
-          <span class="metal-holding-name-text">${m.name||m.itemName||'Unnamed'}</span>
-          ${purityTag}${qaTag||''}
-        </div>
-        <div class="metal-holding-bottom">${grams.toFixed(2)}g · ${oz}oz ${priceTag}${m.occasion?' · '+m.occasion:''}${m.notes?' · '+m.notes:''}${sourceTag}</div>
-      </div>
-      <div class="metal-holding-right">
-        <div class="metal-holding-value">${fmt(convertAmt(usdVal,'USD'))}</div>
-        <div class="metal-holding-weight">${grams.toFixed(2)} g</div>
-        ${paidTag||''}
-      </div>
-      <button class="metal-holding-del" onclick="openEditMetalSheet(${m._metalIdx})" title="Edit" style="color:#4A9EFF;">${m._source==='portfolio'?'✏️':''}</button>
-      ${delBtn}
-    </div>`;
-  }).join('');
-} // end dead function
 
 function addMetalEntry() {
   const name=document.getElementById('metal-name').value.trim(), grams=parseFloat(document.getElementById('metal-grams').value), price=parseFloat(document.getElementById('metal-price').value)||0, date=document.getElementById('metal-date').value||localDateStr(), form=document.getElementById('metal-form').value, notes=document.getElementById('metal-notes').value.trim(), purity=document.getElementById('metal-purity').value.trim(), occasion=document.getElementById('metal-occasion').value.trim();
