@@ -764,8 +764,8 @@
     .nw-hero { background:linear-gradient(155deg,#1B1F5E 0%,#2D1B69 50%,#3D1A6E 100%); border-radius:20px; padding:28px 22px 24px; margin-bottom:16px; color:white; position:relative; overflow:hidden; }
     .nw-hero::before { content:''; position:absolute; top:-60px; right:-60px; width:220px; height:220px; border-radius:50%; background:rgba(255,255,255,0.05); pointer-events:none; }
     .nw-hero::after  { content:''; position:absolute; bottom:-70px; left:-40px; width:190px; height:190px; border-radius:50%; background:rgba(100,80,200,0.12); pointer-events:none; }
-    .nw-hero-label { font-size:0.72em; font-weight:800; opacity:0.65; text-transform:uppercase; letter-spacing:0.8px; margin-bottom:6px; }
-    .nw-hero-amount { font-size:3em; font-weight:900; line-height:1.05; letter-spacing:-1px; }
+    .nw-hero-label { font-size:0.72em; font-weight:800; opacity:0.65; text-transform:uppercase; letter-spacing:0.8px; margin-bottom:6px; text-align:left; }
+    .nw-hero-amount { font-size:3em; font-weight:900; line-height:1.05; letter-spacing:-1px; text-align:left; }
     .nw-hero-change { font-size:0.82em; font-weight:700; margin-top:6px; opacity:0.9; display:flex; align-items:center; gap:4px; }
     .nw-hero-bars { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-top:18px; }
     .nw-hero-bar-block { background:rgba(255,255,255,0.10); backdrop-filter:blur(4px); border-radius:14px; padding:12px 10px; border:1px solid rgba(255,255,255,0.08); }
@@ -786,8 +786,8 @@
     /* ══ TREND CARD ══ */
     .nw-trend-card { background:var(--white); border-radius:var(--radius); box-shadow:var(--card-shadow); padding:18px; margin-bottom:14px; }
     .nw-masked { filter:blur(8px); user-select:none; pointer-events:none; transition:filter 0.3s; }
-    .nw-eye-btn { background:rgba(255,255,255,0.15); border:none; border-radius:50%; width:32px; height:32px; cursor:pointer; font-size:1.1em; display:flex; align-items:center; justify-content:center; flex-shrink:0; transition:background 0.2s; }
-    .nw-eye-btn:hover { background:rgba(255,255,255,0.25); }
+    .nw-eye-btn { background:rgba(255,255,255,0.12); border:1px solid rgba(255,255,255,0.2); border-radius:20px; padding:3px 10px; cursor:pointer; font-size:0.72em; font-weight:800; color:rgba(255,255,255,0.7); font-family:Nunito,sans-serif; letter-spacing:0.3px; display:flex; align-items:center; gap:4px; flex-shrink:0; transition:all 0.2s; }
+    .nw-eye-btn:hover { background:rgba(255,255,255,0.2); }
     .nw-trend-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
     .nw-trend-title { font-size:0.72em; font-weight:900; color:var(--text-light); text-transform:uppercase; letter-spacing:0.5px; }
     .nw-trend-badge { font-size:0.72em; font-weight:900; color:var(--text-light); background:#F5F5F5; padding:3px 10px; border-radius:20px; }
@@ -2279,11 +2279,13 @@
 <div class="screen" id="screen-networth">
   <!-- ── Hero ── -->
   <div class="nw-hero">
-    <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:6px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
       <div class="nw-hero-label" style="margin-bottom:0;">💎 Total Net Worth</div>
-      <button class="nw-eye-btn" id="nw-eye-btn" onclick="toggleNWVisibility()" title="Hide/show balances">👁</button>
+      <button class="nw-eye-btn" id="nw-eye-btn" onclick="toggleNWVisibility()" title="Hide/show balances">
+        <span id="nw-eye-icon">🔓</span>
+      </button>
     </div>
-    <div class="nw-hero-amount" id="nw-total">$0</div>
+    <div class="nw-hero-amount" id="nw-total" style="text-align:left;">$0</div>
     <div class="nw-hero-change" id="nw-change"></div>
     <div class="nw-hero-bars">
       <div class="nw-hero-bar-block">
@@ -9117,8 +9119,8 @@ function toggleNWSection(name) {
 let _nwHidden = false;
 function toggleNWVisibility() {
   _nwHidden = !_nwHidden;
-  const btn = document.getElementById('nw-eye-btn');
-  if (btn) btn.textContent = _nwHidden ? '🙈' : '👁';
+  const iconEl = document.getElementById('nw-eye-icon');
+  if (iconEl) iconEl.textContent = _nwHidden ? '🔒' : '🔓';
   // Mask/unmask all monetary value elements in NW screen
   const targets = document.querySelectorAll(
     '#nw-total, #nw-assets-hero, #nw-liab-hero, #nw-change, .nw-snap-val, ' +
@@ -9191,6 +9193,26 @@ function buildMonthlySnapshot(monthKey) {
 // ══════════════════════════════════════════════════════════════════
 // MONTHLY INTELLIGENCE — full render
 // ══════════════════════════════════════════════════════════════════
+function _snapMonthLabel(snap, fmt) {
+  // Safe cross-browser month label from a snapshot — no Date() parsing
+  const mk = snap.month || snap.date || '';
+  // mk is either 'YYYY-MM' or 'YYYY-MM-DD'
+  const parts = mk.split('-');
+  if (parts.length < 2) return mk || '—';
+  const year = parseInt(parts[0]);
+  const month = parseInt(parts[1]) - 1; // 0-indexed
+  if (isNaN(year) || isNaN(month)) return '—';
+  const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const MONTHS_LONG  = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const mo = MONTHS_SHORT[month] || '?';
+  const moL = MONTHS_LONG[month] || '?';
+  if (fmt === 'short') return mo + " '" + String(year).slice(2);      // Jan '26
+  if (fmt === 'medium') return mo + ' ' + year;                        // Jan 2026
+  if (fmt === 'long') return moL + ' ' + year;                         // January 2026
+  if (fmt === 'axis') return mo + ' ' + String(year).slice(2);         // Jan 26
+  return mo + ' ' + year;
+}
+
 function renderMonthlyIntelligence() {
   const snaps = getNWSnapshots().slice().sort((a,b) => (a.month||a.date||'').localeCompare(b.month||b.date||''));
   const intCard = document.getElementById('nw-intelligence-card');
@@ -9208,10 +9230,7 @@ function renderMonthlyIntelligence() {
   if (chartEl && typeof Chart !== 'undefined') {
     const existing = Chart.getChart(chartEl);
     if (existing) existing.destroy();
-    const labels = snaps.map(s => {
-      const mk = s.month || s.date || '';
-      return mk.length >= 7 ? new Date(mk+'-01').toLocaleDateString('en-US',{month:'short',year:'2-digit'}) : mk;
-    });
+    const labels = snaps.map(s => _snapMonthLabel(s, 'axis'));
     const values = snaps.map(s => s.value || 0);
     const minVal = Math.min(...values);
     new Chart(chartEl, {
@@ -9247,13 +9266,7 @@ function renderMonthlyIntelligence() {
   const selA = document.getElementById('mi-month-a');
   const selB = document.getElementById('mi-month-b');
   if (selA && selB) {
-    const opts = snaps.map((s,i) => {
-      const mk = s.month || s.date || '';
-      const label = mk.length >= 7
-        ? new Date(mk+'-01').toLocaleDateString('en-US',{month:'short',year:'numeric'})
-        : mk;
-      return `<option value="${i}">${label}</option>`;
-    }).join('');
+    const opts = snaps.map((s,i) => `<option value="${i}">${_snapMonthLabel(s,'medium')}</option>`).join('');
     selA.innerHTML = opts;
     selB.innerHTML = opts;
     // Default: latest vs one before
@@ -9269,10 +9282,7 @@ function renderMonthlyIntelligence() {
     const maxVal = Math.max(...snaps.map(s => s.value||0), 1);
     snapListEl.innerHTML = snaps.slice().reverse().map((s, i) => {
       const realIdx = snaps.length - 1 - i;
-      const mk = s.month || s.date || '';
-      const d = mk.length >= 7
-        ? new Date(mk+'-01').toLocaleDateString('en-US',{month:'short',year:'numeric'})
-        : new Date(s.date+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+      const d = _snapMonthLabel(s, 'medium');
       const pct = ((s.value||0) / maxVal * 100).toFixed(0);
       const hasFull = s.income !== undefined;
       const savTag = hasFull && s.savingsRate !== undefined
@@ -9342,13 +9352,12 @@ function _renderMIComparison() {
     }).sort((x,y) => Math.max(y.amtA,y.amtB) - Math.max(x.amtA,x.amtB)).slice(0,6);
 
     const maxAmt = Math.max(...pairs.map(p => Math.max(p.amtA, p.amtB)), 1);
-    const mkLabel = (mk) => mk && mk.length >= 7
-      ? new Date(mk+'-01').toLocaleDateString('en-US',{month:'short'}) : mk;
+    const mkLabel = (s) => _snapMonthLabel(s, 'short');
 
     catEl.innerHTML = `
       <div style="display:flex;justify-content:flex-end;gap:12px;margin-bottom:6px;font-size:0.62em;font-weight:800;color:var(--text-light);">
-        <span style="display:flex;align-items:center;gap:3px;"><span style="width:8px;height:8px;border-radius:2px;background:#C4B5FD;display:inline-block;"></span>${mkLabel(a.month||a.date)}</span>
-        <span style="display:flex;align-items:center;gap:3px;"><span style="width:8px;height:8px;border-radius:2px;background:#7C3AED;display:inline-block;"></span>${mkLabel(b.month||b.date)}</span>
+        <span style="display:flex;align-items:center;gap:3px;"><span style="width:8px;height:8px;border-radius:2px;background:#C4B5FD;display:inline-block;"></span>${_snapMonthLabel(a,"short")}</span>
+        <span style="display:flex;align-items:center;gap:3px;"><span style="width:8px;height:8px;border-radius:2px;background:#7C3AED;display:inline-block;"></span>${_snapMonthLabel(b,"short")}</span>
       </div>
       ${pairs.map(p => {
         const pctA = p.amtA / maxAmt * 100;
@@ -9378,7 +9387,7 @@ function _renderMIComparison() {
   const budgetEl = document.getElementById('mi-budget-section');
   if (budgetEl && hasFull && (b.budgetPerformance||[]).length > 0) {
     budgetEl.innerHTML = `
-      <div style="font-size:0.68em;font-weight:800;color:var(--text-light);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:8px;">Budget Performance — ${new Date((b.month||b.date)+'-01').toLocaleDateString('en-US',{month:'long',year:'numeric'})}</div>
+      <div style="font-size:0.68em;font-weight:800;color:var(--text-light);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:8px;">Budget Performance — ${_snapMonthLabel(b,'long')}</div>
       ${(b.budgetPerformance||[]).slice(0,5).map(bp => {
         const pct = Math.min(bp.pct, 150);
         const over = bp.pct > 100;
@@ -9449,7 +9458,7 @@ function _renderSavingsTrend(snaps) {
   ctx.scale(1/(window.devicePixelRatio||1), 1/(window.devicePixelRatio||1));
   richSnaps.forEach((s, i) => {
     const mk = s.month || s.date || '';
-    const label = mk.length >= 7 ? new Date(mk+'-01').toLocaleDateString('en-US',{month:'short'}) : mk;
+    const label = _snapMonthLabel(s, 'short').split("'")[0].trim(); // "Jan '26" → "Jan" for sparkline
     const x = xScale(i) * (window.devicePixelRatio||1);
     ctx.textAlign = i === 0 ? 'left' : i === richSnaps.length-1 ? 'right' : 'center';
     ctx.fillText(label, x, (50 - 2) * (window.devicePixelRatio||1));
