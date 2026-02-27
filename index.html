@@ -9123,11 +9123,20 @@ function toggleNWVisibility() {
   if (iconEl) iconEl.textContent = _nwHidden ? '🔒' : '🔓';
   // Mask/unmask all monetary value elements in NW screen
   const targets = document.querySelectorAll(
-    '#nw-total, #nw-assets-hero, #nw-liab-hero, #nw-change, .nw-snap-val, ' +
-    '#nw-alloc-total-val, [id^="nw-val-"], .metal-holding-value, ' +
-    '.nw-account-val, .nw-holding-val, .nw-holding-row-val, ' +
+    '#nw-total, #nw-assets-hero, #nw-liab-hero, #nw-change, ' +
+    '#nw-assets-total, #nw-liab-total, #nw-alloc-total, ' +
+    '.nw-section-val, .nw-group-total, .nw-snap-val, ' +
+    '[id^="nw-val-"], .nw-account-val, .nw-holding-val, ' +
+    '.nw-holding-row-val, .metal-holding-value, ' +
     '#mi-kpi-row, #mi-cat-bars, #mi-budget-section'
   );
+  // Also mask/unmask inline-rendered account body values (dynamically generated)
+  document.querySelectorAll('#screen-networth [style*="font-weight:900"]').forEach(el => {
+    // Only target elements that look like monetary values (contain $ or currency sym)
+    if (el.textContent && /[$₹€£¥]|,\d{3}/.test(el.textContent)) {
+      el.classList.toggle('nw-masked', _nwHidden);
+    }
+  });
   targets.forEach(el => {
     el.classList.toggle('nw-masked', _nwHidden);
   });
@@ -9174,8 +9183,11 @@ function buildMonthlySnapshot(monthKey) {
     });
   } catch(e) {}
 
+  const now = new Date();
+  const timeStr = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
   return {
     date: localDateStr(),
+    time: timeStr,
     month: mk,
     value: nw.netWorth,
     totalAssets: nw.totalAssets,
@@ -9214,7 +9226,16 @@ function _snapMonthLabel(snap, fmt) {
 }
 
 function renderMonthlyIntelligence() {
-  const snaps = getNWSnapshots().slice().sort((a,b) => (a.month||a.date||'').localeCompare(b.month||b.date||''));
+  const allSnaps = getNWSnapshots().slice().sort((a,b) => (a.month||a.date||'').localeCompare(b.month||b.date||''));
+  // For the trend chart + comparison: use one entry per month (latest value wins)
+  const monthMap = new Map();
+  allSnaps.forEach(s => {
+    const mk = s.month || s.date?.slice(0,7) || '';
+    const prev = monthMap.get(mk);
+    // Keep the one with richer data or higher _id (most recent manual)
+    if (!prev || (s._id && (!prev._id || s._id > prev._id))) monthMap.set(mk, s);
+  });
+  const snaps = [...monthMap.values()].sort((a,b) => (a.month||a.date||'').localeCompare(b.month||b.date||''));
   const intCard = document.getElementById('nw-intelligence-card');
   if (!intCard) return;
 
@@ -9279,18 +9300,29 @@ function renderMonthlyIntelligence() {
   // ── Snapshot list ───────────────────────────────────────────────
   const snapListEl = document.getElementById('nw-snapshots-list');
   if (snapListEl) {
-    const maxVal = Math.max(...snaps.map(s => s.value||0), 1);
-    snapListEl.innerHTML = snaps.slice().reverse().map((s, i) => {
-      const realIdx = snaps.length - 1 - i;
-      const d = _snapMonthLabel(s, 'medium');
+    const listSnaps = allSnaps.slice().reverse(); // ALL snapshots in list
+    const maxVal = Math.max(...listSnaps.map(s => s.value||0), 1);
+    snapListEl.innerHTML = listSnaps.map((s, i) => {
+      const realIdx = allSnaps.length - 1 - i;
+      // Label: manual snapshots show full date + time, auto-snapshots show month only
+      const monthLabel = _snapMonthLabel(s, 'medium');
+      const isManual = s._manual;
+      const timeLabel = isManual && s.time ? ` · ${s.time}` : '';
+      const dateLabel = isManual && s.date ? new Date(s.date + 'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '';
+      const d = isManual ? `${dateLabel}${timeLabel}` : monthLabel;
+      const subLabel = isManual ? `<div style="font-size:0.65em;color:var(--text-light);font-weight:700;">${monthLabel}</div>` : '';
       const pct = ((s.value||0) / maxVal * 100).toFixed(0);
       const hasFull = s.income !== undefined;
-      const savTag = hasFull && s.savingsRate !== undefined
-        ? `<span style="font-size:0.68em;background:${s.savingsRate>=0?'#D1FAE5':'#FEE2E2'};color:${s.savingsRate>=0?'#10B981':'#EF4444'};border-radius:4px;padding:1px 6px;font-weight:800;margin-left:4px;">${s.savingsRate>=0?'+':''}${s.savingsRate.toFixed(0)}% saved</span>`
+      const savTag = hasFull && s.savingsRate !== undefined && s.savingsRate !== 0
+        ? `<span style="font-size:0.62em;background:${s.savingsRate>=0?'#D1FAE5':'#FEE2E2'};color:${s.savingsRate>=0?'#10B981':'#EF4444'};border-radius:4px;padding:1px 5px;font-weight:800;white-space:nowrap;">${s.savingsRate>=0?'+':''}${s.savingsRate.toFixed(0)}% saved</span>`
         : '';
-      return `<div class="nw-snap-row">
-        <div class="nw-snap-date">${d}${savTag}</div>
-        <div class="nw-snap-bar-wrap"><div class="nw-snap-bar-fill" style="width:${pct}%;"></div></div>
+      return `<div class="nw-snap-row" style="align-items:flex-start;padding:9px 0;">
+        <div class="nw-snap-date" style="width:90px;flex-shrink:0;">
+          <div style="font-size:0.78em;font-weight:800;color:var(--text-dark);line-height:1.3;">${d}</div>
+          ${subLabel}
+          ${savTag}
+        </div>
+        <div class="nw-snap-bar-wrap" style="margin-top:6px;"><div class="nw-snap-bar-fill" style="width:${pct}%;"></div></div>
         <div class="nw-snap-val">${fmt(s.value||0)}</div>
         <button class="nw-snap-del" onclick="deleteNWSnapshot(${realIdx})" title="Delete">×</button>
       </div>`;
@@ -9480,10 +9512,13 @@ function autoSnapshot() {
 
 function saveNWSnapshot() {
   const snap = buildMonthlySnapshot(viewMonth);
+  snap._manual = true; // flag as manual — shown with full date+time
+  snap._id = 'snap_' + Date.now(); // unique id so multiple per month are allowed
   const snaps = getNWSnapshots();
-  const existing = snaps.find(s => s.month === snap.month);
-  if (existing) { Object.assign(existing, snap); }
-  else { snaps.push(snap); }
+  // For manual: always add new (don't replace — user chose to save at this moment)
+  // But avoid exact same-second duplicates
+  const tooRecent = snaps.find(s => s._id && Math.abs(Date.now() - parseInt(s._id.split('_')[1]||0)) < 5000);
+  if (!tooRecent) snaps.push(snap);
   save();
   renderNetWorth();
   renderMonthlyIntelligence();
