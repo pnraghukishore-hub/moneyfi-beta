@@ -1623,9 +1623,9 @@
       <div class="metal-detail-usd gold" id="metal-detail-usd">$0</div>
     </div>
     <div style="background:#F8F8F8;border-radius:8px;padding:6px 10px;font-size:0.72em;font-weight:800;color:var(--text-med);text-align:center;flex-shrink:0;">
-      <div style="font-size:0.72em;color:var(--text-light);" id="metal-price-base-label">$/gram (24K pure)</div>
+      <div style="font-size:0.72em;color:var(--text-light);" id="metal-price-base-label">—/gram (24K pure)</div>
       <div style="display:flex;align-items:center;gap:6px;">
-        <span style="font-size:1.3em;font-weight:900;color:var(--text-dark);" id="metal-live-price">$96.50</span>
+        <span style="font-size:1.3em;font-weight:900;color:var(--text-dark);" id="metal-live-price">—</span>
         <button onclick="showMetalPriceEdit()" style="background:#F0F4FF;border:none;border-radius:7px;padding:3px 8px;font-size:0.72em;font-weight:800;color:var(--primary);cursor:pointer;">⚙️ Price</button>
       </div>
       <div id="metal-price-override-panel" style="display:none;margin-top:8px;background:white;border:1.5px solid #DDD;border-radius:10px;padding:10px 12px;text-align:left;">
@@ -3463,8 +3463,8 @@ function getPriceForMetal(metalType, purity) {
 }
 
 const METAL_CONFIG = {
-  gold:     { label:'Gold',     emoji:'🥇', pricePerGram: 96.50,  hint:'24K pure gold ≈ $96.50/g. 22K ≈ $88.42/g, 18K ≈ $72.38/g. Use ✏️ Edit to set live price.' },
-  silver:   { label:'Silver',   emoji:'🥈', pricePerGram: 1.03,   hint:'999 Fine silver ≈ $1.03/g. 925 Sterling ≈ $0.95/g, 900 Coin ≈ $0.93/g.' },
+  gold:     { label:'Gold',     emoji:'🥇', pricePerGram: 96.50,  hint:'Use ✏️ Price to set your local gold price per gram. 22K = 91.7%, 18K = 75% of 24K price.' },
+  silver:   { label:'Silver',   emoji:'🥈', pricePerGram: 1.03,   hint:'Use ✏️ Price to set your local silver price per gram. 925 Sterling = 92.5%, 900 = 90%.' },
   platinum: { label:'Platinum', emoji:'🔷', pricePerGram: 30.50,  hint:'Pt999 ≈ $30.50/g. Pt950 ≈ $28.98/g. Use ✏️ Edit to set current price — per-purity overrides supported.' },
 };
 
@@ -5863,7 +5863,7 @@ function searchDeleteTx(monthKey, type, snapshotIdx, snapshotAmt, snapshotCat) {
   }
   if (resolvedIdx < 0) { showToast('Transaction not found — may already be deleted'); return; }
   const tx = list[resolvedIdx];
-  if (!confirm(`Delete "${tx.category}" · ${fmt(Math.abs(tx.amount))}?`)) return;
+  if (!confirm(`Delete "${tx.category}" · ${fmtConverted(Math.abs(tx.amount), tx.currency||currentCurrency.code)}?`)) return;
   // If metal-linked — also remove the _metals entry
   if (tx._qaLinkId && data._metals) {
     const mi = data._metals.findIndex(m => m._qaLinkId === tx._qaLinkId);
@@ -5894,7 +5894,7 @@ function listDeleteTx(monthKey, type, idx) {
   if (!data[monthKey] || !data[monthKey][listKey]) return;
   const tx = data[monthKey][listKey][idx];
   if (!tx) return;
-  if (!confirm(`Delete "${tx.category}" · ${fmt(Math.abs(tx.amount))}?`)) return;
+  if (!confirm(`Delete "${tx.category}" · ${fmtConverted(Math.abs(tx.amount), tx.currency||currentCurrency.code)}?`)) return;
   // If metal-linked — also remove the _metals entry
   if (tx._qaLinkId && data._metals) {
     const mi = data._metals.findIndex(m => m._qaLinkId === tx._qaLinkId);
@@ -6731,13 +6731,13 @@ function toggleMetalPriceUnit() {
 function applyMetalPriceOverride() {
   let price = parseFloat(document.getElementById('metal-price-override-input').value);
   if (!price || price <= 0) { showToast('Enter a valid price ❌'); return; }
+  // Close panel FIRST (before any re-renders that might race on iOS)
+  const panel = document.getElementById('metal-price-override-panel');
+  if (panel) panel.style.display = 'none';
   // Convert oz → g if user is in oz mode
   const unit = document.getElementById('metal-price-unit-toggle')?.value || 'g';
   if (unit === 'oz') price = price / 31.1035; // 1 troy oz = 31.1035g
   updateMetalPriceOverride(currentMetal, price);
-  // Close panel after save
-  const panel = document.getElementById('metal-price-override-panel');
-  if (panel) panel.style.display = 'none';
   showToast('✅ Price updated');
 }
 
@@ -6795,7 +6795,7 @@ function openPurityOverride(metalType, purity, currentPrice) {
   const label = document.getElementById('poi-label');
   const input = document.getElementById('poi-input');
   if (!panel) return;
-  if (label) label.textContent = `Set $/gram for ${purity} ${metalType.charAt(0).toUpperCase()+metalType.slice(1)}:`;
+  if (label) label.textContent = `Set ${sym()}/gram for ${purity} ${metalType.charAt(0).toUpperCase()+metalType.slice(1)}:`;
   if (input) { input.value = currentPrice.toFixed(2); input.focus(); }
   panel.style.display = '';
 }
@@ -6814,8 +6814,8 @@ function switchMetal(type) {
   document.getElementById('metal-detail-usd').className='metal-detail-usd '+type;
   const basePrice = getMetalBasePrice(type);
   const hasOverride = (data._metalPriceOverrides||{})[type] !== undefined;
-  document.getElementById('metal-live-price').textContent='$'+basePrice.toFixed(2)+(hasOverride?' ✏️':'');
-  const baseLabel = type === 'gold' ? '$/gram (24K pure)' : type === 'silver' ? '$/gram (999 Fine)' : '$/gram (Pt999)';
+  document.getElementById('metal-live-price').textContent=sym()+basePrice.toFixed(2)+(hasOverride?' ✏️':'');
+  const baseLabel = type === 'gold' ? sym()+'/gram (24K pure)' : type === 'silver' ? sym()+'/gram (999 Fine)' : sym()+'/gram (Pt999)';
   const baseLabelEl = document.getElementById('metal-price-base-label');
   if (baseLabelEl) baseLabelEl.textContent = baseLabel;
   document.getElementById('metal-add-icon').textContent=cfg.emoji;
@@ -6867,7 +6867,19 @@ function renderMetals() {
   document.getElementById('metal-detail-usd').textContent=fmt(convertAmt(active.usd,'USD'));
   document.getElementById('metal-stat-entries').textContent=active.entries.length;
   document.getElementById('metal-stat-oz').textContent=(active.grams/31.1035).toFixed(3);
-  document.getElementById('metal-stat-avg').textContent=active.avgCost>0?'$'+active.avgCost.toFixed(2):'$0';
+  document.getElementById('metal-stat-avg').textContent=active.avgCost>0?sym()+active.avgCost.toFixed(2):sym()+'0';
+  // Sync live price display to current currency (so currency switch updates it)
+  const _lp = document.getElementById('metal-live-price');
+  if (_lp) {
+    const _lpBase = getMetalBasePrice(currentMetal);
+    const _lpOv = (data._metalPriceOverrides||{})[currentMetal] !== undefined;
+    _lp.textContent = sym() + _lpBase.toFixed(2) + (_lpOv?' ✏️':'');
+  }
+  const _bll = document.getElementById('metal-price-base-label');
+  if (_bll) {
+    _bll.textContent = currentMetal==='gold' ? sym()+'/gram (24K pure)' :
+                       currentMetal==='silver' ? sym()+'/gram (999 Fine)' : sym()+'/gram (Pt999)';
+  }
   document.getElementById('holdings-list-count').textContent=active.entries.length+(active.entries.length===1?' entry':' entries');
   const hl=document.getElementById('metals-holdings-list');
   if(active.entries.length===0){hl.innerHTML=`<div class="metal-empty"><div class="metal-empty-icon">${ac.emoji}</div><div class="metal-empty-text">No ${ac.label.toLowerCase()} entries yet.<br>Tap + above to add one.</div></div>`;return;}
@@ -8713,6 +8725,25 @@ function getNWSnapshots() {
   });
 }
 
+// Convert a snapshot's stored value to the CURRENT display currency
+// Snapshots store value in whatever currency was active at capture time
+function snapValue(s) {
+  if (!s) return 0;
+  const storedCurrency = (s.currency || 'USD').toUpperCase();
+  const raw = s.value || 0;
+  if (storedCurrency === currentCurrency.code.toUpperCase()) return raw;
+  // Convert: stored → USD → current display currency
+  return nwConvert(raw, storedCurrency);
+}
+// Same for income/expenses/investments fields in a snapshot
+function snapField(s, field) {
+  if (!s) return 0;
+  const storedCurrency = (s.currency || 'USD').toUpperCase();
+  const raw = s[field] || 0;
+  if (storedCurrency === currentCurrency.code.toUpperCase()) return raw;
+  return nwConvert(raw, storedCurrency);
+}
+
 function getRealEstateAssets() {
   if (!data._realEstate) data._realEstate = [];
   return data._realEstate;
@@ -8985,7 +9016,7 @@ function renderNetWorth() {
             return d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
           }),
           datasets: [{
-            data: snaps.map(s => s.value),
+            data: snaps.map(s => snapValue(s)),
             borderColor: '#C8900A',
             backgroundColor: 'rgba(245,200,66,0.12)',
             borderWidth: 2.5,
@@ -9523,7 +9554,7 @@ function renderMonthlyIntelligence() {
     const existing = Chart.getChart(chartEl);
     if (existing) existing.destroy();
     const labels = snaps.map(s => _snapMonthLabel(s, 'axis'));
-    const values = snaps.map(s => s.value || 0);
+    const values = snaps.map(s => snapValue(s));
     const minVal = Math.min(...values);
     new Chart(chartEl, {
       type: 'line',
@@ -9572,7 +9603,7 @@ function renderMonthlyIntelligence() {
   const snapListEl = document.getElementById('nw-snapshots-list');
   if (snapListEl) {
     const listSnaps = allSnaps.slice().reverse(); // ALL snapshots in list (newest first)
-    const maxVal = Math.max(...listSnaps.map(s => s.value||0), 1);
+    const maxVal = Math.max(...listSnaps.map(s => snapValue(s)), 1);
     // Group by year for collapsible display
     const byYear = {};
     listSnaps.forEach((s, i) => {
@@ -9595,7 +9626,7 @@ function renderMonthlyIntelligence() {
       const dateLabel = isManual && s.date ? new Date(s.date + 'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '';
       const d = isManual ? `${dateLabel}${timeLabel}` : monthLabel;
       const subLabel = isManual ? `<div style="font-size:0.65em;color:var(--text-light);font-weight:700;">${monthLabel}</div>` : '';
-      const pct = ((s.value||0) / maxVal * 100).toFixed(0);
+      const pct = (snapValue(s) / maxVal * 100).toFixed(0);
       const hasFull = s.income !== undefined;
       const savTag = hasFull && s.savingsRate !== undefined && s.savingsRate !== 0
         ? `<span style="font-size:0.62em;background:${s.savingsRate>=0?'#D1FAE5':'#FEE2E2'};color:${s.savingsRate>=0?'#10B981':'#EF4444'};border-radius:4px;padding:1px 5px;font-weight:800;white-space:nowrap;">${s.savingsRate>=0?'+':''}${s.savingsRate.toFixed(0)}% saved</span>`
@@ -9607,7 +9638,7 @@ function renderMonthlyIntelligence() {
           ${savTag}
         </div>
         <div class="nw-snap-bar-wrap" style="margin-top:6px;"><div class="nw-snap-bar-fill" style="width:${pct}%;"></div></div>
-        <div class="nw-snap-val">${fmt(s.value||0)}</div>
+        <div class="nw-snap-val">${fmt(snapValue(s))}</div>
         <button class="nw-snap-del" onclick="deleteNWSnapshot('${s._id||realIdx}')" title="Delete">×</button>
       </div>`;
     }).join('');
@@ -9648,9 +9679,9 @@ function _renderMIComparison() {
   const kpiEl = document.getElementById('mi-kpi-row');
   if (kpiEl) {
     const kpis = [
-      { label:'Net Worth', valA: a.value||0, valB: b.value||0, fmt: v => sym()+getCompactNum(v), icon:'💎' },
-      { label:'Income', valA: a.income||0, valB: b.income||0, fmt: v => sym()+getCompactNum(v), icon:'💵', hidden: !hasFull },
-      { label:'Expenses', valA: a.expenses||0, valB: b.expenses||0, fmt: v => sym()+getCompactNum(v), icon:'💸', flip: true, hidden: !hasFull },
+      { label:'Net Worth', valA: snapValue(a), valB: snapValue(b), fmt: v => sym()+getCompactNum(v), icon:'💎' },
+      { label:'Income', valA: snapField(a,'income'), valB: snapField(b,'income'), fmt: v => sym()+getCompactNum(v), icon:'💵', hidden: !hasFull },
+      { label:'Expenses', valA: snapField(a,'expenses'), valB: snapField(b,'expenses'), fmt: v => sym()+getCompactNum(v), icon:'💸', flip: true, hidden: !hasFull },
       { label:'Savings %', valA: a.savingsRate||0, valB: b.savingsRate||0, fmt: v => v.toFixed(1)+'%', icon:'🏦', hidden: !hasFull },
     ].filter(k => !k.hidden);
 
@@ -9679,7 +9710,10 @@ function _renderMIComparison() {
     const pairs = [...allCats].map(cat => {
       const ca = (a.topCategories||[]).find(c=>c.cat===cat);
       const cb = (b.topCategories||[]).find(c=>c.cat===cat);
-      return { cat, amtA: ca?.amt||0, amtB: cb?.amt||0 };
+      // Convert category amounts from snapshot's stored currency to current display currency
+      const convA = ca ? nwConvert(ca.amt||0, a.currency||'USD') : 0;
+      const convB = cb ? nwConvert(cb.amt||0, b.currency||'USD') : 0;
+      return { cat, amtA: convA, amtB: convB };
     }).sort((x,y) => Math.max(y.amtA,y.amtB) - Math.max(x.amtA,x.amtB)).slice(0,6);
 
     const maxAmt = Math.max(...pairs.map(p => Math.max(p.amtA, p.amtB)), 1);
@@ -9722,10 +9756,13 @@ function _renderMIComparison() {
       ${(b.budgetPerformance||[]).slice(0,5).map(bp => {
         const pct = Math.min(bp.pct, 150);
         const over = bp.pct > 100;
+        const bCurr = b.currency||'USD';
+        const bActual = nwConvert(bp.actual||0, bCurr);
+        const bGoal = nwConvert(bp.goal||0, bCurr);
         return `<div style="margin-bottom:6px;">
           <div style="display:flex;justify-content:space-between;margin-bottom:2px;">
             <div style="font-size:0.72em;font-weight:800;color:var(--text-dark);">${bp.name}</div>
-            <div style="font-size:0.65em;font-weight:800;color:${over?'#EF4444':'#10B981'};">${fmt(bp.actual)} / ${fmt(bp.goal)}</div>
+            <div style="font-size:0.65em;font-weight:800;color:${over?'#EF4444':'#10B981'};">${fmt(bActual)} / ${fmt(bGoal)}</div>
           </div>
           <div style="height:6px;background:#F0F0F0;border-radius:4px;overflow:hidden;">
             <div style="width:${Math.min(pct,100).toFixed(1)}%;height:100%;background:${over?'#EF4444':'#10B981'};border-radius:4px;"></div>
@@ -9821,7 +9858,7 @@ function saveNWSnapshot() {
   save();
   renderNetWorth();
   renderMonthlyIntelligence();
-  showToast('📸 Snapshot saved · ' + fmt(snap.value));
+  showToast('📸 Snapshot saved · ' + fmt(snapValue(snap)));
 }
 
 function _nwsBuildTypePicker() {
