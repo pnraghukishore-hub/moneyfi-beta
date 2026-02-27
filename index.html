@@ -1473,7 +1473,7 @@
   <div class="cal-grid-wrap" id="cal-grid-wrap"
     ontouchstart="calSwipeStart(event)"
     ontouchend="calSwipeEnd(event)">
-    <div class="cal-dow-row">
+    <div class="cal-dow-row" id="cal-dow-row">
       <div class="cal-dow">SUN</div><div class="cal-dow">MON</div><div class="cal-dow">TUE</div>
       <div class="cal-dow">WED</div><div class="cal-dow">THU</div><div class="cal-dow">FRI</div><div class="cal-dow">SAT</div>
     </div>
@@ -4887,13 +4887,16 @@ function setCalView(mode) {
   const btnList  = document.getElementById('cal-view-btn-list');
   const activeStyle  = 'background:#1E2A6E;color:white;border:none;border-radius:8px;padding:5px 12px;font-size:0.78em;font-weight:800;cursor:pointer;';
   const inactiveStyle= 'background:#F0F0F0;color:var(--text-med);border:none;border-radius:8px;padding:5px 12px;font-size:0.78em;font-weight:800;cursor:pointer;';
+  const dowRow = document.getElementById('cal-dow-row');
   if (mode === 'calendar') {
     if (calGrid) calGrid.style.display = '';
     if (listView) listView.style.display = 'none';
+    if (dowRow) dowRow.style.display = ''; // Issue 2: show DOW in calendar mode
     if (btnCal)  btnCal.style.cssText  = activeStyle;
     if (btnList) btnList.style.cssText = inactiveStyle;
   } else {
     if (calGrid) calGrid.style.display = 'none';
+    if (dowRow) dowRow.style.display = 'none'; // Issue 2: hide DOW in list mode
     if (listView) { listView.style.display = ''; renderCalListView(listView); }
     if (btnCal)  btnCal.style.cssText  = inactiveStyle;
     if (btnList) btnList.style.cssText = activeStyle;
@@ -6409,8 +6412,10 @@ function showMetalPriceEdit() {
 function applyMetalPriceOverride() {
   const price = parseFloat(document.getElementById('metal-price-override-input').value);
   if (!price || price <= 0) { showToast('Enter a valid price ❌'); return; }
-  updateMetalPriceOverride(currentMetal, price); // no purity = sets base price
-  renderPurityPrices(currentMetal);
+  updateMetalPriceOverride(currentMetal, price);
+  // Issue 5: close the panel after saving
+  const panel = document.getElementById('metal-price-override-panel');
+  if (panel) panel.style.display = 'none';
 }
 
 function renderPurityPrices(metalType) {
@@ -6557,6 +6562,74 @@ function renderMetals() {
   allEntries.sort((a,b) => (b.date||'').localeCompare(a.date||''));
   document.getElementById('holdings-list-count').textContent = allEntries.length + (allEntries.length===1?' entry':' entries');
   if(allEntries.length===0){hl.innerHTML=`<div class="metal-empty"><div class="metal-empty-icon">${ac.emoji}</div><div class="metal-empty-text">No ${ac.label.toLowerCase()} entries yet.<br>Tap + above to add one.</div></div>`;return;}
+  // Issue 8: Group entries by date — no-date at bottom with friendly label
+  const datedEntries   = allEntries.filter(m => m.date);
+  const undatedEntries = allEntries.filter(m => !m.date);
+  const byDateGroup = {};
+  datedEntries.forEach(m => {
+    const dk = m.date; // YYYY-MM-DD
+    if (!byDateGroup[dk]) byDateGroup[dk] = [];
+    byDateGroup[dk].push(m);
+  });
+  const dateGroupKeys = Object.keys(byDateGroup).sort().reverse(); // newest first
+
+  let holdingHtml = '';
+  dateGroupKeys.forEach(dk => {
+    const groupLabel = new Date(dk+'T00:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'2-digit'});
+    holdingHtml += `<div style="font-size:0.72em;font-weight:800;color:var(--text-light);padding:8px 20px 2px;text-transform:uppercase;letter-spacing:0.04em;background:#FAFAFA;border-bottom:1px solid #F0F0F0;">${groupLabel}</div>`;
+    byDateGroup[dk].forEach((m,idx) => {
+      holdingHtml += renderMetalHoldingRow(m, allEntries.indexOf(m));
+    });
+  });
+  if (undatedEntries.length > 0) {
+    holdingHtml += `<div style="font-size:0.72em;font-weight:800;color:var(--text-light);padding:8px 20px 2px;text-transform:uppercase;letter-spacing:0.04em;background:#FAFAFA;border-bottom:1px solid #F0F0F0;">📦 No Date Recorded</div>`;
+    undatedEntries.forEach((m,idx) => {
+      holdingHtml += renderMetalHoldingRow(m, allEntries.indexOf(m));
+    });
+  }
+  hl.innerHTML = holdingHtml;
+}
+
+function renderMetalHoldingRow(m, idx) {
+  hl=hl||document.getElementById('metals-holdings-list'); // just for scope — not used
+  // Re-declare locals (same as map function below)
+  const ac = METAL_CONFIG[currentMetal];
+  const grams=Number(m.grams||m.weightGms||0);
+  const purity = m.purity||'';
+  const price = getPriceForMetal(currentMetal, purity);
+  const usdVal=grams*price;
+  const oz=(grams/31.1035).toFixed(3);
+  const purityTag = purity ? `<span style="background:#F5F5F5;border-radius:5px;padding:1px 6px;font-size:0.75em;font-weight:700;color:#7C3AED;">${purity}</span>` : '';
+  const priceTag = `<span style="color:var(--text-light);font-size:0.75em;">$${price.toFixed(2)}/g <span style="color:#10B981;font-size:0.85em;font-weight:800;">live</span></span>`;
+  const sourceTag = m._source==='networth' ? `<span style="font-size:0.7em;color:var(--text-light);"> · 📊 NW</span>` : '';
+  const paidCostUSD = (m.price && m.price > 0) ? m.price * grams : 0;
+  const paidTag = paidCostUSD > 0 ? `<div style="font-size:0.7em;color:#7C3AED;font-weight:700;margin-top:1px;">paid ${fmt(convertAmt(paidCostUSD,'USD'))}</div>` : '';
+  const fromMonthLabel = m._fromMonth ? new Date(m._fromMonth+'-01').toLocaleDateString('en-US',{month:'short',year:'2-digit'}) : '';
+  const qaTag = m._fromQA ? `<span style="font-size:0.65em;background:#EDE9FE;color:#7C3AED;border-radius:4px;padding:2px 6px;margin-left:4px;font-weight:700;">📱 ${fromMonthLabel}</span>` : '';
+  const delBtn = m._source==='networth'
+    ? `<button class="metal-holding-del" onclick="navigateTo('networth')" title="Manage in Net Worth">↗️</button>`
+    : `<button class="metal-holding-del" onclick="deleteMetalEntry(${m._metalIdx})" title="Delete">✕</button>`;
+  return `<div class="metal-holding-item">
+      <div class="metal-holding-badge ${currentMetal}">${ac.emoji}</div>
+      <div class="metal-holding-main">
+        <div class="metal-holding-top">
+          <span class="metal-holding-name-text">${m.name||m.itemName||'Unnamed'}</span>
+          ${purityTag}${qaTag||''}
+        </div>
+        <div class="metal-holding-bottom">${grams.toFixed(2)}g · ${oz}oz ${priceTag}${m.occasion?' · '+m.occasion:''}${m.notes?' · '+m.notes:''}${sourceTag}</div>
+      </div>
+      <div class="metal-holding-right">
+        <div class="metal-holding-value">${fmt(convertAmt(usdVal,'USD'))}</div>
+        <div class="metal-holding-weight">${grams.toFixed(2)} g</div>
+        ${paidTag||''}
+      </div>
+      <button class="metal-holding-del" onclick="openEditMetalSheet(${m._metalIdx})" title="Edit" style="color:#4A9EFF;">${m._source==='portfolio'?'✏️':''}</button>
+      ${delBtn}
+    </div>`;
+}
+
+// ── Old map-based render replaced by grouped render above ──
+function _DEAD_renderMetalHoldings_allEntries_map() {
   hl.innerHTML=allEntries.map((m,idx)=>{
     const grams=Number(m.grams||m.weightGms||0);
     const purity = m.purity||'';
@@ -6568,7 +6641,9 @@ function renderMetals() {
     const priceTag = `<span style="color:var(--text-light);font-size:0.75em;">$${price.toFixed(2)}/g <span style="color:#10B981;font-size:0.85em;font-weight:800;">live</span></span>`;
     const paidCostUSD = (m.price && m.price > 0) ? m.price * grams : 0;
     const paidTag = paidCostUSD > 0 ? `<div style="font-size:0.7em;color:#7C3AED;font-weight:700;margin-top:1px;">paid ${fmt(convertAmt(paidCostUSD,'USD'))}</div>` : '';
-    const qaTag = m._fromQA ? `<span style="font-size:0.65em;background:#EDE9FE;color:#7C3AED;border-radius:4px;padding:1px 5px;margin-left:4px;">📱 ${m._fromMonth||'Investing'}</span>` : '';
+    // Issue 8: qaTag kept minimal — date grouping handles the visual context
+    const fromMonthLabel = m._fromMonth ? new Date(m._fromMonth+'-01').toLocaleDateString('en-US',{month:'short',year:'2-digit'}) : '';
+    const qaTag = m._fromQA ? `<span style="font-size:0.65em;background:#EDE9FE;color:#7C3AED;border-radius:4px;padding:2px 6px;margin-left:4px;font-weight:700;">📱 ${fromMonthLabel}</span>` : '';
     const sourceTag = m._source==='networth' ? `<span style="font-size:0.7em;color:var(--text-light);"> · 📊 NW</span>` : '';
     const delBtn = m._source==='networth'
       ? `<button class="metal-holding-del" onclick="navigateTo('networth')" title="Manage in Net Worth">↗️</button>`
@@ -6591,7 +6666,8 @@ function renderMetals() {
       ${delBtn}
     </div>`;
   }).join('');
-}
+} // end dead function
+
 function addMetalEntry() {
   const name=document.getElementById('metal-name').value.trim(), grams=parseFloat(document.getElementById('metal-grams').value), price=parseFloat(document.getElementById('metal-price').value)||0, date=document.getElementById('metal-date').value||localDateStr(), form=document.getElementById('metal-form').value, notes=document.getElementById('metal-notes').value.trim(), purity=document.getElementById('metal-purity').value.trim(), occasion=document.getElementById('metal-occasion').value.trim();
   if(!name){showToast('Enter a source/name ❌');return;} if(!grams||grams<=0){showToast('Enter a valid weight ❌');return;}
@@ -7468,18 +7544,28 @@ function goToBudgetDetail(cardKey) {
 
 // ── Budget swipe gesture ────────────────────────────────────────
 let _budgetSwipeX = null;
+let _budgetSwipeBlocked = false; // Issue 7: block if swipe started on bubble scroll
 
 function budgetSwipeStart(e) {
+  // Issue 7: Don't capture swipe if it starts inside a scrollable bubble area
+  const target = e.target;
+  const inBubbleScroll = target.closest('.budget-cats-scroll');
+  if (inBubbleScroll) {
+    _budgetSwipeBlocked = true;
+    _budgetSwipeX = null;
+    return;
+  }
+  _budgetSwipeBlocked = false;
   _budgetSwipeX = e.touches ? e.touches[0].clientX : null;
 }
 
 function budgetSwipeEnd(e) {
-  if (_budgetSwipeX === null) return;
+  if (_budgetSwipeBlocked || _budgetSwipeX === null) { _budgetSwipeBlocked = false; return; }
   const endX = e.changedTouches ? e.changedTouches[0].clientX : null;
   if (endX === null) { _budgetSwipeX = null; return; }
   const delta = endX - _budgetSwipeX;
   _budgetSwipeX = null;
-  if (Math.abs(delta) < 50) return;
+  if (Math.abs(delta) < 60) return; // slightly higher threshold for intentional swipe
   budgetChangeMonth(delta < 0 ? 1 : -1);
 }
 
