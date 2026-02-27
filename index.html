@@ -5646,6 +5646,8 @@ function onTxSearch(q) {
     if (listView) listView.style.display = 'none';
     if (dayWrap) dayWrap.style.display = '';
     if (resultsEl) resultsEl.style.display = 'none';
+    // Restore summary to current month totals
+    renderTransactions();
     return;
   }
 
@@ -5678,6 +5680,23 @@ function onTxSearch(q) {
   // Apply family author filter on top of search if active
   if (_authorFilter !== 'all') {
     results = results.filter(r => r._addedBy === _authorFilter);
+  }
+
+  // ── Update summary bar to reflect search results ──
+  const _srInc = results.filter(r => r._type === 'income').reduce((s,r) => s + convertAmt(r.amount, r.currency), 0);
+  const _srExp = results.filter(r => r._type === 'expense').reduce((s,r) => s + convertAmt(r.amount, r.currency), 0);
+  const _srInv = results.filter(r => r._type === 'investment').reduce((s,r) => s + convertAmt(r.amount, r.currency), 0);
+  const _srNet = _srInc - _srExp - _srInv;
+  const _elInc = document.getElementById('cal-total-income');
+  const _elExp = document.getElementById('cal-total-expense');
+  const _elSav = document.getElementById('cal-total-savings');
+  const _elNet = document.getElementById('cal-total-net');
+  if (_elInc) _elInc.textContent = fmt(_srInc);
+  if (_elExp) _elExp.textContent = fmt(_srExp);
+  if (_elSav) { _elSav.textContent = fmt(_srInv); _elSav.style.color = '#7C3AED'; }
+  if (_elNet) {
+    _elNet.textContent = (_srNet >= 0 ? '+' : '-') + fmt(Math.abs(_srNet));
+    _elNet.style.color = _srNet >= 0 ? 'var(--income)' : 'var(--expenses)';
   }
 
   if (results.length === 0) {
@@ -7677,7 +7696,12 @@ function homeCardTouchStart(e, cardKey, type, subcat) {
     _didLongPress       = true;
     _homeLongPressTimer = null;
     if (navigator.vibrate) navigator.vibrate(50);
-    goToBudgetDetail(cardKey);
+    // Route correctly: investments → search by invest type; expense/income → budget detail
+    if (_homeLongPressType === 'investment') {
+      goToInvestDetail(cardKey);
+    } else {
+      goToBudgetDetail(cardKey);
+    }
   }, 600);
 }
 
@@ -7720,6 +7744,10 @@ function goToInvestDetail(cardKey) {
     if (searchInput) {
       searchInput.value = cardKey;
       onTxSearch(cardKey);
+      // Show context toast with total for that invest category
+      const cards = getHomeInvCards();
+      const card = cards.find(c => c.key === cardKey);
+      if (card) showToast(`📈 ${card.label || cardKey} · all history`);
     }
   }, 80);
 }
