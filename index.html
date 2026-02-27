@@ -82,22 +82,7 @@
       --bg: #E0F4FF; --bg-cream: #ECF9FF;
       background: #E0F4FF !important;
     }
-    body.theme-sunset {
-      --bg: #1C0F07; --bg-cream: #261508;
-      --text-dark: #F5E6D0; --text-med: #C4A882; --text-light: #8A6848;
-      --white: #2D1A0C;
-      --yellow: #E8943A; --yellow-light: #3A2010;
-      --primary: #E8943A; --primary-light: #3A2010;
-      --income: #7FD4A0; --expenses: #F4846A;
-      background: #1C0F07 !important;
-    }
-    body.theme-sunset .settings-accordion { border-color: #3D2010 !important; }
-    body.theme-sunset .acc-header { background: #261508 !important; border-color: #3D2010 !important; }
-    body.theme-sunset .home-card-item { background: #2D1A0C !important; border-color: #3D2010 !important; }
-    body.theme-sunset input, body.theme-sunset select { background: #2D1A0C !important; color: #F5E6D0 !important; border-color: #5A3018 !important; }
-    body.theme-sunset .theme-card.active-theme { box-shadow: 0 0 0 3px #E8943A !important; }
-    body.theme-sunset .topbar { background: #1C0F07 !important; border-color: #3D2010 !important; }
-    body.theme-sunset .nav-bar { background: #1C0F07 !important; border-color: #3D2010 !important; }
+
 
     body { font-family: 'Nunito', sans-serif; background: var(--bg); color: var(--text-dark); min-height: 100vh; position: relative; overflow-x: hidden; }
 
@@ -622,9 +607,7 @@
     .theme-card.space .tc-name, .theme-card.space .tc-desc { color: #C8C8FF; }
     /* Theme: Ocean */
     .theme-card.ocean { background: linear-gradient(135deg, #E0F4FF, #B3E5FC); }
-    .theme-card.sunset { background: linear-gradient(135deg, #3D1C08, #6B2F0A); color: #F5E6D0; }
-    .theme-card.sunset .tc-name { color: #F5E6D0; }
-    .theme-card.sunset .tc-desc { color: #C4A882; }
+
     /* Theme: Default */
     .theme-card.default { background: linear-gradient(135deg, #FFF9E6, #FFF0B0); }
 
@@ -647,8 +630,7 @@
     /* Ocean elements */
     .ocean-wave { position: fixed; pointer-events: none; font-size: 2em; animation: waveFloat 5s ease-in-out infinite; z-index: 0; opacity: 0; transition: opacity 0.5s; }
     body.theme-ocean .ocean-wave { opacity: 0.25; }
-    .sunset-glow { position: fixed; pointer-events: none; font-size: 2em; animation: floatBounce 4s ease-in-out infinite; z-index: 0; opacity: 0; transition: opacity 0.5s; }
-    body.theme-sunset .sunset-glow { opacity: 0.4; }
+
     @keyframes waveFloat { 0%,100%{transform:translateX(0) rotate(0deg)} 50%{transform:translateX(15px) rotate(10deg)} }
 
     /* ── DECORATIVE ── */
@@ -1321,11 +1303,7 @@
 <div class="ocean-wave" style="top:200px;left:-18px;animation-delay:1s;font-size:1.5em;">🌊</div>
 <div class="ocean-wave" style="bottom:340px;right:12px;animation-delay:2s;font-size:1.8em;">🐚</div>
 <div class="ocean-wave" style="top:320px;left:-18px;animation-delay:0.5s;">🐟</div>
-<!-- Sunset -->
-<div class="sunset-glow" style="bottom:180px;right:10px;animation-delay:0s;">🌅</div>
-<div class="sunset-glow" style="top:180px;left:-18px;animation-delay:1.2s;font-size:1.6em;">🔥</div>
-<div class="sunset-glow" style="bottom:320px;right:14px;animation-delay:0.6s;font-size:1.4em;">✨</div>
-<div class="sunset-glow" style="top:340px;left:-18px;animation-delay:1.8s;font-size:1.2em;">🌙</div>
+
 
 <!-- ══ LOCK SCREEN — COMMENTED OUT (RE-ENABLE LATER) ══
 === To re-enable: uncomment this entire block and the JS PIN section below ===
@@ -1651,6 +1629,14 @@
         <button onclick="showMetalPriceEdit()" style="background:#F0F4FF;border:none;border-radius:7px;padding:3px 8px;font-size:0.72em;font-weight:800;color:var(--primary);cursor:pointer;">⚙️ Price</button>
       </div>
       <div id="metal-price-override-panel" style="display:none;margin-top:8px;background:white;border:1.5px solid #DDD;border-radius:10px;padding:10px 12px;text-align:left;">
+          <div style="display:flex;align-items:center;justify-content:flex-end;gap:6px;margin-bottom:8px;">
+            <span style="font-size:0.72em;font-weight:700;color:var(--text-med);">Price per:</span>
+            <select id="metal-price-unit-toggle" onchange="toggleMetalPriceUnit()"
+              style="font-family:Nunito,sans-serif;font-weight:800;font-size:0.78em;border:1.5px solid #DDD;border-radius:7px;padding:3px 8px;background:#F8F8F8;cursor:pointer;">
+              <option value="g">gram (g)</option>
+              <option value="oz">troy oz</option>
+            </select>
+          </div>
         <div style="font-size:0.78em;font-weight:800;color:var(--text-dark);margin-bottom:6px;" id="metal-price-override-label">Set base $/gram:</div>
         <div style="display:flex;gap:8px;margin-bottom:8px;">
           <input type="number" id="metal-price-override-input" step="0.01" placeholder="e.g. 96.50" style="flex:1;border:1.5px solid #DDD;border-radius:8px;padding:6px 10px;font-size:0.9em;font-weight:700;">
@@ -1763,7 +1749,7 @@
       <div class="inv-field"><label>Avg Cost / Share ($)</label><input type="number" id="inv-cost" placeholder="0.00" step="0.01"></div>
       <div class="inv-field"><label>Current Price ($)</label><input type="number" id="inv-price" placeholder="0.00" step="0.01"></div>
       <div class="inv-field"><label>Date Added</label><input type="date" id="inv-date"></div>
-      <div class="inv-field full"><label>Account / Broker</label><input type="text" id="inv-broker" placeholder="e.g. Zerodha, Groww, Fidelity, Robinhood"></div>
+      <div class="inv-field full"><label>Account / Broker</label><input type="text" id="inv-broker" placeholder="e.g. Zerodha, Groww, Fidelity, Schwab"></div>
     </div>
     <button class="add-invest-btn" onclick="addInvestEntry()">+ Add to Portfolio</button>
   </div>
@@ -1961,12 +1947,7 @@
           <div class="tc-desc">Dive deep into your finances</div>
           <div class="tc-active-badge">✓</div>
         </div>
-        <div class="theme-card sunset" id="theme-sunset" onclick="setTheme('sunset')">
-          <div class="tc-preview">🌅🔥✨</div>
-          <div class="tc-name">Sunset Mode</div>
-          <div class="tc-desc">Warm dark — easy on the eyes</div>
-          <div class="tc-active-badge">✓</div>
-        </div>
+
       </div>
     </div>
   </div>
@@ -3589,7 +3570,7 @@ function showToast(msg, dur=2500) { const t=document.getElementById('toast'); t.
 // ══════════════════════════════════════════════════════
 function setTheme(theme) {
   // Remove all theme classes
-  document.body.classList.remove('theme-looney','theme-jungle','theme-space','theme-ocean','theme-sunset');
+  document.body.classList.remove('theme-looney','theme-jungle','theme-space','theme-ocean');
   if(theme !== 'default') document.body.classList.add('theme-'+theme);
   currentTheme = theme;
   localStorage.setItem('mf_theme', theme);
@@ -4666,10 +4647,15 @@ function selectCurrency(code) {
     calcInvTotal();
   } else {
     saveCurrency(c);
-    renderHome(); renderSettings();
+    renderHome();
+    try { renderTransactions(); } catch(e) {}
+    try { renderBudget(); } catch(e) {}
+    try { renderNetWorth(); } catch(e) {}
+    try { renderMetals(); } catch(e) {}
+    try { renderSettings(); } catch(e) {}
   }
   closeModal('currency-modal');
-  showToast(`${c.flag} Currency set to ${c.code}`);
+  showToast(`${c.flag} Currency set to ${c.code} — all screens updated`);
 }
 
 // ══════════════════════════════════════════════════════
@@ -5826,7 +5812,8 @@ function onTxSearch(q) {
             <div style="display:flex;gap:6px;margin-top:8px;justify-content:flex-end;">
               <button onclick="searchEditTx('${t._month}','${t._type}',${t._idx})"
                 style="background:#F0F4FF;border:none;border-radius:8px;padding:5px 12px;font-size:0.72em;font-weight:800;color:var(--primary);cursor:pointer;">✏️ Edit</button>
-              <button onclick="searchDeleteTx('${t._month}','${t._type}',${t._idx})"
+              <button data-month="${t._month}" data-type="${t._type}" data-idx="${t._idx}" data-amt="${Math.abs(Number(t.amount||0))}" data-cat="${(t.category||'').replace(/"/g,'&quot;')}"
+                onclick="searchDeleteTxByEl(this)"
                 style="background:#FFF0F0;border:none;border-radius:8px;padding:5px 12px;font-size:0.72em;font-weight:800;color:var(--expenses);cursor:pointer;">✕ Delete</button>
             </div>
           </div>`;
@@ -5844,19 +5831,45 @@ function searchEditTx(monthKey, type, idx) {
   setTimeout(() => openEditTx(monthKey, type, idx), 150);
 }
 
-function searchDeleteTx(monthKey, type, idx) {
+function searchDeleteTxByEl(btn) {
+  const monthKey = btn.dataset.month;
+  const type = btn.dataset.type;
+  const idx = parseInt(btn.dataset.idx);
+  const amt = parseFloat(btn.dataset.amt);
+  const cat = btn.dataset.cat;
+  searchDeleteTx(monthKey, type, idx, amt, cat);
+}
+
+function searchDeleteTx(monthKey, type, snapshotIdx, snapshotAmt, snapshotCat) {
+  // Use snapshot values to verify we're deleting the right item
+  // Re-find by matching category+amount+approximate index for safety
   const typeMap = {expense:'expenses',income:'income',investment:'investments',debt:'debts',given:'givenToOthers',additional:'additional'};
   const listKey = typeMap[type];
   if (!listKey || !data[monthKey] || !data[monthKey][listKey]) return;
-  const tx = data[monthKey][listKey][idx];
-  if (!tx) return;
+  // Re-resolve current index: find item matching the snapshot fingerprint
+  const list = data[monthKey][listKey];
+  let resolvedIdx = -1;
+  // First try exact match by category+amount at stored index (fast path)
+  if (list[snapshotIdx] &&
+      String(list[snapshotIdx].category) === String(snapshotCat) &&
+      Math.abs(Number(list[snapshotIdx].amount)) === Math.abs(Number(snapshotAmt))) {
+    resolvedIdx = snapshotIdx;
+  } else {
+    // Fallback: search entire list for matching item
+    resolvedIdx = list.findIndex(t =>
+      String(t.category) === String(snapshotCat) &&
+      Math.abs(Number(t.amount)) === Math.abs(Number(snapshotAmt))
+    );
+  }
+  if (resolvedIdx < 0) { showToast('Transaction not found — may already be deleted'); return; }
+  const tx = list[resolvedIdx];
   if (!confirm(`Delete "${tx.category}" · ${fmt(Math.abs(tx.amount))}?`)) return;
   // If metal-linked — also remove the _metals entry
   if (tx._qaLinkId && data._metals) {
     const mi = data._metals.findIndex(m => m._qaLinkId === tx._qaLinkId);
     if (mi >= 0) data._metals.splice(mi, 1);
   }
-  data[monthKey][listKey].splice(idx, 1);
+  list.splice(resolvedIdx, 1);
   save();
   renderHome(); renderMetals(); renderNetWorth();
   showToast('🗑 Deleted');
@@ -6693,20 +6706,39 @@ function showMetalPriceEdit() {
   panel.style.display = isVisible ? 'none' : '';
   if (!isVisible) {
     const base = getMetalBasePrice(currentMetal);
-    document.getElementById('metal-price-override-input').value = base.toFixed(2);
+    const unitToggle = document.getElementById('metal-price-unit-toggle');
+    const unit = unitToggle ? unitToggle.value : 'g';
+    const baseInUnit = unit === 'oz' ? (base * 31.1035) : base;
+    document.getElementById('metal-price-override-input').value = baseInUnit.toFixed(2);
     document.getElementById('metal-price-override-label').textContent =
-      `Set base price (${currentMetal === 'gold' ? '24K pure' : currentMetal === 'silver' ? '999 Fine' : 'Pt999'}) $/gram for ${METAL_CONFIG[currentMetal].label}:`;
+      `Set base price (${currentMetal === 'gold' ? '24K pure' : currentMetal === 'silver' ? '999 Fine' : 'Pt999'}) ${sym()}/${unit} for ${METAL_CONFIG[currentMetal].label}:`;
     renderPurityPrices(currentMetal);
   }
 }
 
+function toggleMetalPriceUnit() {
+  const unit = document.getElementById('metal-price-unit-toggle')?.value || 'g';
+  const base = getMetalBasePrice(currentMetal);
+  const displayPrice = unit === 'oz' ? (base * 31.1035) : base;
+  const inp = document.getElementById('metal-price-override-input');
+  if (inp) inp.value = displayPrice.toFixed(2);
+  const metalLabel = currentMetal === 'gold' ? '24K pure' : currentMetal === 'silver' ? '999 Fine' : 'Pt999';
+  const lbl = document.getElementById('metal-price-override-label');
+  if (lbl) lbl.textContent = `Set base price (${metalLabel}) ${sym()}/${unit} for ${METAL_CONFIG[currentMetal].label}:`;
+  renderPurityPrices(currentMetal);
+}
+
 function applyMetalPriceOverride() {
-  const price = parseFloat(document.getElementById('metal-price-override-input').value);
+  let price = parseFloat(document.getElementById('metal-price-override-input').value);
   if (!price || price <= 0) { showToast('Enter a valid price ❌'); return; }
+  // Convert oz → g if user is in oz mode
+  const unit = document.getElementById('metal-price-unit-toggle')?.value || 'g';
+  if (unit === 'oz') price = price / 31.1035; // 1 troy oz = 31.1035g
   updateMetalPriceOverride(currentMetal, price);
-  // Issue 5: close the panel after saving
+  // Close panel after save
   const panel = document.getElementById('metal-price-override-panel');
   if (panel) panel.style.display = 'none';
+  showToast('✅ Price updated');
 }
 
 function renderPurityPrices(metalType) {
@@ -6731,7 +6763,7 @@ function renderPurityPrices(metalType) {
     return `<tr style="border-bottom:1px solid #F0F0F0;">
       <td style="padding:4px 6px;font-weight:800;color:var(--text-dark);font-size:0.82em;">${p}</td>
       <td style="padding:4px 6px;font-weight:700;color:var(--text-med);font-size:0.78em;">${hasOverride ? '' : (mult*100).toFixed(1)+'%'}</td>
-      <td style="padding:4px 6px;font-weight:900;color:var(--primary);font-size:0.88em;">$${effectivePrice.toFixed(2)}/g ${overrideBadge}</td>
+      <td style="padding:4px 6px;font-weight:900;color:var(--primary);font-size:0.88em;">${sym()}${(document.getElementById('metal-price-unit-toggle')?.value==='oz'?(effectivePrice*31.1035):effectivePrice).toFixed(2)}/${document.getElementById('metal-price-unit-toggle')?.value||'g'} ${overrideBadge}</td>
       <td style="padding:4px 2px;text-align:right;">
         <button onclick="openPurityOverride('${metalType}','${p}',${effectivePrice})"
           style="background:#F0F4FF;border:none;border-radius:5px;padding:2px 7px;font-size:0.7em;font-weight:800;color:var(--primary);cursor:pointer;">Set</button>
@@ -8673,7 +8705,12 @@ function getNWAccounts() {
 
 function getNWSnapshots() {
   if (!data._nwSnapshots) data._nwSnapshots = [];
-  return data._nwSnapshots;
+  // Filter out any future-month snapshots caused by UTC timezone drift (IST +5:30 edge)
+  const nowMk = getCurrentMonthKey();
+  return data._nwSnapshots.filter(s => {
+    const mk = s.month || (s.date || '').slice(0, 7) || '2000-01';
+    return mk <= nowMk;
+  });
 }
 
 function getRealEstateAssets() {
@@ -9114,10 +9151,23 @@ function renderNetWorth() {
   });
 }
 
-function deleteNWSnapshot(idx) {
+function deleteNWSnapshot(snapId) {
+  // snapId is either _id (string) or fallback numeric index
   const snaps = getNWSnapshots();
+  let resolvedIdx = -1;
+  if (typeof snapId === 'string') {
+    resolvedIdx = snaps.findIndex(s => s._id === snapId);
+  }
+  if (resolvedIdx < 0) {
+    // Fallback: treat as index
+    resolvedIdx = parseInt(snapId);
+  }
+  if (resolvedIdx < 0 || resolvedIdx >= snaps.length) {
+    showToast('Snapshot not found'); return;
+  }
   if (!confirm('Delete this snapshot?')) return;
-  snaps.splice(idx, 1);
+  snaps.splice(resolvedIdx, 1);
+  data._nwSnapshots = snaps;
   save();
   renderNetWorth();
   showToast('Snapshot deleted');
@@ -9521,10 +9571,23 @@ function renderMonthlyIntelligence() {
   // ── Snapshot list ───────────────────────────────────────────────
   const snapListEl = document.getElementById('nw-snapshots-list');
   if (snapListEl) {
-    const listSnaps = allSnaps.slice().reverse(); // ALL snapshots in list
+    const listSnaps = allSnaps.slice().reverse(); // ALL snapshots in list (newest first)
     const maxVal = Math.max(...listSnaps.map(s => s.value||0), 1);
-    snapListEl.innerHTML = listSnaps.map((s, i) => {
-      const realIdx = allSnaps.length - 1 - i;
+    // Group by year for collapsible display
+    const byYear = {};
+    listSnaps.forEach((s, i) => {
+      const yr = (s.month || s.date || '2000').slice(0,4);
+      if (!byYear[yr]) byYear[yr] = [];
+      byYear[yr].push({ s, i });
+    });
+    const years = Object.keys(byYear).sort().reverse();
+    const currentYr = new Date().getFullYear().toString();
+
+    snapListEl.innerHTML = years.map((yr, yi) => {
+      const isCurrentYear = yr === currentYr;
+      const colId = 'snap-yr-' + yr;
+      const entries = byYear[yr].map(({ s, i }) => {
+        const realIdx = allSnaps.length - 1 - i;
       // Label: manual snapshots show full date + time, auto-snapshots show month only
       const monthLabel = _snapMonthLabel(s, 'medium');
       const isManual = s._manual;
@@ -9545,9 +9608,24 @@ function renderMonthlyIntelligence() {
         </div>
         <div class="nw-snap-bar-wrap" style="margin-top:6px;"><div class="nw-snap-bar-fill" style="width:${pct}%;"></div></div>
         <div class="nw-snap-val">${fmt(s.value||0)}</div>
-        <button class="nw-snap-del" onclick="deleteNWSnapshot(${realIdx})" title="Delete">×</button>
+        <button class="nw-snap-del" onclick="deleteNWSnapshot('${s._id||realIdx}')" title="Delete">×</button>
       </div>`;
     }).join('');
+
+    // Wrap entries in collapsible year accordion
+    return `
+      <div style="margin-bottom:4px;">
+        <div onclick="const b=document.getElementById('${colId}');const ch=document.getElementById('${colId}-ch');b.style.display=b.style.display==='none'?'':'none';ch.style.transform=b.style.display==='none'?'rotate(-90deg)':'';"
+          style="display:flex;align-items:center;justify-content:space-between;padding:7px 2px;cursor:pointer;user-select:none;">
+          <div style="font-size:0.72em;font-weight:900;color:var(--text-med);letter-spacing:0.5px;">
+            ${yr}${isCurrentYear ? ' · Current' : ''}
+            <span style="font-size:0.85em;color:var(--text-light);font-weight:700;margin-left:6px;">${byYear[yr].length} snapshot${byYear[yr].length!==1?'s':''}</span>
+          </div>
+          <span id="${colId}-ch" style="font-size:0.7em;color:var(--text-light);transition:transform 0.2s;">▼</span>
+        </div>
+        <div id="${colId}" style="display:${isCurrentYear?'':'none'};">${entries}</div>
+      </div>`;
+  }).join('');
   }
 
   // ── Savings rate sparkline ───────────────────────────────────────
@@ -9570,9 +9648,9 @@ function _renderMIComparison() {
   const kpiEl = document.getElementById('mi-kpi-row');
   if (kpiEl) {
     const kpis = [
-      { label:'Net Worth', valA: a.value||0, valB: b.value||0, fmt: v => fmt(v), icon:'💎' },
-      { label:'Income', valA: a.income||0, valB: b.income||0, fmt: v => fmt(v), icon:'💵', hidden: !hasFull },
-      { label:'Expenses', valA: a.expenses||0, valB: b.expenses||0, fmt: v => fmt(v), icon:'💸', flip: true, hidden: !hasFull },
+      { label:'Net Worth', valA: a.value||0, valB: b.value||0, fmt: v => sym()+getCompactNum(v), icon:'💎' },
+      { label:'Income', valA: a.income||0, valB: b.income||0, fmt: v => sym()+getCompactNum(v), icon:'💵', hidden: !hasFull },
+      { label:'Expenses', valA: a.expenses||0, valB: b.expenses||0, fmt: v => sym()+getCompactNum(v), icon:'💸', flip: true, hidden: !hasFull },
       { label:'Savings %', valA: a.savingsRate||0, valB: b.savingsRate||0, fmt: v => v.toFixed(1)+'%', icon:'🏦', hidden: !hasFull },
     ].filter(k => !k.hidden);
 
@@ -9620,7 +9698,7 @@ function _renderMIComparison() {
         return `<div style="margin-bottom:8px;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">
             <div style="font-size:0.72em;font-weight:800;color:var(--text-dark);">${p.cat}</div>
-            <div style="font-size:0.65em;font-weight:800;color:${deltaColor};">${delta>=0?'+':''}${fmt(delta)}</div>
+            <div style="font-size:0.65em;font-weight:800;color:${deltaColor};">${delta>=0?'+':''}${sym()}${getCompactNum(Math.abs(delta))}</div>
           </div>
           <div style="display:flex;gap:3px;height:7px;">
             <div style="flex:1;background:#F0F0F0;border-radius:4px;overflow:hidden;">
@@ -11209,7 +11287,6 @@ _auth.onAuthStateChanged(async user => {
       'narasimha.neo@gmail.com',
       'ping2rupesh@gmail.com',
       'ebooksofpnr@gmail.com',
-      'pnraghukishore@icloud.com',
       'pnrkiran@gmail.com'
     ];
 
