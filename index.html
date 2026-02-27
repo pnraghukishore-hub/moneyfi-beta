@@ -6406,14 +6406,93 @@ function deleteMonth(key) { if(!confirm(`Delete all data for ${getDisplayMonth(k
 // EXPORT / IMPORT / BACKUP
 // ══════════════════════════════════════════════════════
 function downloadBackup() {
-  const str="data:text/json;charset=utf-8,"+encodeURIComponent(JSON.stringify(data));
-  const a=document.createElement('a'); a.setAttribute("href",str); a.setAttribute("download","moneyflow_backup_"+new Date().toISOString().slice(0,10)+".json");
-  document.body.appendChild(a); a.click(); a.remove(); showToast('Backup downloaded ✅');
+  // Full envelope — data object + separate localStorage prefs
+  const envelope = {
+    _appVersion: 'MoneyFi-2.0',
+    _exportedAt: new Date().toISOString(),
+    _theme: localStorage.getItem('mf_theme') || 'default',
+    _currency: localStorage.getItem('mf_currency') || null,
+    data: data
+  };
+  const blob = new Blob([JSON.stringify(envelope, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'MoneyFi_Backup_' + new Date().toISOString().slice(0,10) + '.json';
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+  // Summary toast
+  const months = Object.keys(data).filter(k => /^\d{4}-\d{2}$/.test(k)).length;
+  const txCount = Object.keys(data).filter(k => /^\d{4}-\d{2}$/.test(k))
+    .reduce((s,mk) => s + ['expenses','income','investments','debts','givenToOthers','additional']
+      .reduce((ss,t) => ss + (data[mk][t]||[]).length, 0), 0);
+  showToast('✅ Backup saved · ' + months + ' months · ' + txCount + ' transactions', 3500);
 }
 function restoreBackup(input) {
-  const file=input.files[0]; if(!file) return;
-  const reader=new FileReader();
-  reader.onload=e=>{ try{ const imported=JSON.parse(e.target.result); if(confirm('⚠️ This will OVERWRITE all data. Continue?')){ data=imported; save(); populateDataMonthSelect(); renderHome(); showToast('✅ Data restored!'); } }catch(err){showToast('❌ Invalid JSON');} };
+  const file = input.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const parsed = JSON.parse(e.target.result);
+      // Support both formats: new envelope {_appVersion, data} or legacy raw data object
+      const isEnvelope = parsed._appVersion || parsed.data;
+      const importedData = isEnvelope ? parsed.data : parsed;
+      const importedTheme = isEnvelope ? parsed._theme : null;
+      const importedCurrency = isEnvelope ? parsed._currency : null;
+
+      // Build preview summary
+      const months = Object.keys(importedData).filter(k => /^\d{4}-\d{2}$/.test(k));
+      const txCount = months.reduce((s,mk) => s +
+        ['expenses','income','investments','debts','givenToOthers','additional']
+          .reduce((ss,t) => ss + (importedData[mk]?.[t]||[]).length, 0), 0);
+      const metalsCount = (importedData._metals||[]).length;
+      const nwCount = (importedData._nwAccounts||[]).length;
+      const exportedAt = parsed._exportedAt ? new Date(parsed._exportedAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : 'unknown date';
+
+      const summary = [
+        '📦 Backup from: ' + exportedAt,
+        '📅 ' + months.length + ' months of transactions',
+        '💳 ' + txCount + ' total transactions',
+        '🥇 ' + metalsCount + ' metal entries',
+        '💎 ' + nwCount + ' NW accounts',
+        importedTheme ? '🎨 Theme: ' + importedTheme : '',
+        importedCurrency ? '💱 Currency: ' + JSON.parse(importedCurrency).code : '',
+      ].filter(Boolean).join('\n');
+
+      if (!confirm('⚠️ RESTORE BACKUP\n\n' + summary + '\n\nThis will OVERWRITE all current data. Continue?')) return;
+
+      // Restore data
+      data = importedData;
+
+      // Restore theme if present
+      if (importedTheme) {
+        localStorage.setItem('mf_theme', importedTheme);
+        setTheme(importedTheme);
+      }
+
+      // Restore currency if present
+      if (importedCurrency) {
+        try {
+          const cur = JSON.parse(importedCurrency);
+          currentCurrency = cur;
+          localStorage.setItem('mf_currency', importedCurrency);
+        } catch(e) {}
+      }
+
+      // Save and full re-render
+      save();
+      populateDataMonthSelect();
+      renderHome();
+      try { renderTransactions(); } catch(e) {}
+      try { renderBudget(); } catch(e) {}
+      try { renderNetWorth(); } catch(e) {}
+      try { renderMetals(); } catch(e) {}
+      try { renderSettings(); } catch(e) {}
+      showToast('✅ Restored · ' + months.length + ' months · ' + txCount + ' transactions', 3500);
+    } catch(err) {
+      showToast('❌ Invalid backup file — ' + err.message);
+    }
+  };
   reader.readAsText(file);
 }
 function exportAllData() {
@@ -10362,14 +10441,28 @@ function clearDataset(type) {
 }
 
 function confirmResetAll() {
-  if (!confirm('⚠️ This will delete ALL data permanently. Are you sure?')) return;
-  if (!confirm('🚨 Final confirmation — delete everything?')) return;
-  const keepKeys = ['_currency','_homeSpendCards','_homeInvCards','_customCats','_expenseGoals','_savingsGoals'];
-  Object.keys(data).forEach(k => { if (!keepKeys.includes(k)) delete data[k]; });
+  if (!confirm('⚠️ CLEAN RESTART\n\nThis deletes ALL transactions, metals, real estate, net worth, goals, recurring rules, and snapshots.\n\nYour card layout and category settings will be kept.\n\nAre you sure?')) return;
+  if (!confirm('🚨 Final confirmation — this cannot be undone. Delete everything?')) return;
+
+  // Wipe all transaction months (YYYY-MM keys)
+  Object.keys(data).filter(k => /^\d{4}-\d{2}$/.test(k)).forEach(k => delete data[k]);
+
+  // Wipe all _keys EXCEPT layout/settings prefs
+  const KEEP = ['_homeSpendCards','_homeInvCards','_customCats','_nwCustomTypes','_nwTypeVisible','_familyMembers'];
+  Object.keys(data).filter(k => k.startsWith('_')).forEach(k => {
+    if (!KEEP.includes(k)) delete data[k];
+  });
+
+  // Do NOT wipe theme or currency — user wants to keep their display preferences
   save();
-  renderResetSummary();
+  try { renderResetSummary(); } catch(e) {}
+  try { renderMonthsList(); } catch(e) {}
   renderHome();
-  showToast('🗑️ All transaction data cleared');
+  try { renderTransactions(); } catch(e) {}
+  try { renderBudget(); } catch(e) {}
+  try { renderNetWorth(); } catch(e) {}
+  try { renderMetals(); } catch(e) {}
+  showToast('🧹 Clean restart complete — all data cleared', 3000);
 }
 
 // ══════════════════════════════════════════════════════
