@@ -1684,7 +1684,7 @@
     </div>
     <div class="metal-add-panel-body" id="metal-add-panel-body">
       <div class="metal-form-grid">
-        <div class="metal-form-field"><label>Source / Name</label><input type="text" id="metal-name" placeholder="e.g. OneGold, Coin"></div>
+        <div class="metal-form-field"><label>Source / Name</label><input type="text" id="metal-name" placeholder="e.g. Physical, Coin, Digital Gold"></div>
         <div class="metal-form-field"><label>Weight (grams)</label><input type="number" id="metal-grams" placeholder="0.00" step="0.001"></div>
         <div class="metal-form-field"><label>Purity</label><input type="text" id="metal-purity" placeholder="e.g. 22K, 999"></div>
         <div class="metal-form-field"><label>Occasion</label><input type="text" id="metal-occasion" placeholder="e.g. Purchase, Gift"></div>
@@ -1737,7 +1737,7 @@
       <div class="inv-field"><label>Avg Cost / Share ($)</label><input type="number" id="inv-cost" placeholder="0.00" step="0.01"></div>
       <div class="inv-field"><label>Current Price ($)</label><input type="number" id="inv-price" placeholder="0.00" step="0.01"></div>
       <div class="inv-field"><label>Date Added</label><input type="date" id="inv-date"></div>
-      <div class="inv-field full"><label>Account / Broker</label><input type="text" id="inv-broker" placeholder="e.g. Fidelity, Robinhood, Webull"></div>
+      <div class="inv-field full"><label>Account / Broker</label><input type="text" id="inv-broker" placeholder="e.g. Zerodha, Groww, Fidelity, Robinhood"></div>
     </div>
     <button class="add-invest-btn" onclick="addInvestEntry()">+ Add to Portfolio</button>
   </div>
@@ -3297,12 +3297,32 @@ const catConfig = [
 ];
 
 const DEFAULT_CATS = {
-  expense:    ['Breakfast','Lunch','Dinner','Snacks','Coffee','Groceries','FastFood','Transport','Uber','Gas','Health','Dental','Shopping','Clothing','Cosmetics','Electric','Utility','Phone','Internet'],
-  income:     ['Salary','Freelance','Bonus','Interest','Dividend','Gift','Return','Refund','Other'],
-  investment: ['Stocks','ETF','Crypto','Gold','Silver','Real Estate','401k','IRA','Mutual Fund','Other'],
-  debt:       ['Credit Card','Loan','Mortgage','Medical','Other'],
-  given:      ['Parents','Family','Friend','Charity','Other'],
-  additional: ['Entertainment','Travel','Auto','Insurance','Subscription','Other']
+  expense: [
+    'Groceries','FastFood','Restaurant','Coffee','Breakfast','Lunch','Dinner','Snacks','Takeout',
+    'Gas','Fuel','Transport','Uber','Ola','Auto','Metro','Parking','Toll',
+    'Rent','Electricity','Water','Internet','Phone','Utility','Maintenance',
+    'Doctor','Medicine','Pharmacy','Dental','Gym',
+    'Shopping','Clothing','Electronics','Cosmetics','Household',
+    'Netflix','Spotify','Amazon Prime','Hotstar','Subscription',
+    'School Fees','Tuition','Books','Course',
+    'Parents','Kids','Gift','Charity','Donation',
+    'EMI','Insurance','Tax','Entertainment','Travel','Other'
+  ],
+  income: [
+    'Salary','Bonus','Freelance','Side Income','Rental Income',
+    'Interest','Dividend','Capital Gains',
+    'Gift','Return','Refund','Reimbursement','Other'
+  ],
+  investment: [
+    'Stocks','ETF','Mutual Fund','SIP','Index Fund',
+    'NPS','PPF','EPF','VPF','401k','IRA','Pension',
+    'Fixed Deposit','Recurring Deposit','Bonds',
+    'Crypto','Gold','Silver','Real Estate',
+    'Insurance Policy','Other'
+  ],
+  debt:       ['Credit Card','Personal Loan','Home Loan','Car Loan','Student Loan','Medical Debt','Other'],
+  given:      ['Parents','Spouse','Kids','Sibling','Friend','Relative','Charity','Other'],
+  additional: ['Entertainment','Travel','Hotel','Flight','Vacation','Sports','Hobby','Auto Service','Other']
 };
 
 function getCustomCats() {
@@ -3873,16 +3893,19 @@ function renderHomeInsights(expenses, income, investments) {
     </div>`).join('');
 }
 const DEFAULT_INV_CARDS = [
-  { key:'Stocks',      label:'Stocks',          icon:'📊', color:'#4A9EFF', bg:'#EEF5FF', fieldTemplate:'Stocks',      visible:true },
-  { key:'Crypto',      label:'Crypto',          icon:'🪙', color:'#F59E0B', bg:'#FFFBEE', fieldTemplate:'Crypto',      visible:true },
-  { key:'Metals',      label:'Metals',          icon:'🥇', color:'#C8900A', bg:'#FFF8E0', fieldTemplate:'Metals',      visible:true },
-  { key:'Real Estate', label:'Real Estate',     icon:'🏡', color:'#10B981', bg:'#F0FBF3', fieldTemplate:'Real Estate', visible:true },
-  { key:'ETF/MF',      label:'ETF / MF',        icon:'🗂', color:'#7C3AED', bg:'#F3EEFF', fieldTemplate:'ETF/MF',      visible:true },
-  { key:'PF/VPF',      label:'PF / VPF',        icon:'🏛️', color:'#0EA5E9', bg:'#E0F2FE', fieldTemplate:'General',     visible:true },
-  { key:'NPS',         label:'NPS',             icon:'🧓', color:'#8B5CF6', bg:'#F3EEFF', fieldTemplate:'General',     visible:true },
-  { key:'PPF',         label:'PPF',             icon:'📮', color:'#059669', bg:'#ECFDF5', fieldTemplate:'General',     visible:true },
-  { key:'FD',          label:'Fixed Deposit',   icon:'🏦', color:'#D97706', bg:'#FFFBEB', fieldTemplate:'General',     visible:false },
-  { key:'Insurance',   label:'Insurance',       icon:'🛡️', color:'#DC2626', bg:'#FEF2F2', fieldTemplate:'General',     visible:false },
+  // ── Visible by default — universal investment types ──
+  { key:'Stocks',        label:'Stocks',           icon:'📊', color:'#4A9EFF', bg:'#EEF5FF', fieldTemplate:'Stocks',      visible:true  },
+  { key:'ETF/MF',        label:'ETF / Mutual Fund',icon:'🗂',  color:'#7C3AED', bg:'#F3EEFF', fieldTemplate:'ETF/MF',      visible:true  },
+  { key:'Crypto',        label:'Crypto',            icon:'🪙', color:'#F59E0B', bg:'#FFFBEE', fieldTemplate:'Crypto',      visible:true  },
+  { key:'Metals',        label:'Gold & Metals',     icon:'🥇', color:'#C8900A', bg:'#FFF8E0', fieldTemplate:'Metals',      visible:true  },
+  { key:'Real Estate',   label:'Real Estate',       icon:'🏡', color:'#10B981', bg:'#F0FBF3', fieldTemplate:'Real Estate', visible:true  },
+  { key:'Retirement',    label:'Retirement',        icon:'🏛️', color:'#0EA5E9', bg:'#E0F2FE', fieldTemplate:'General',     visible:true  },
+  // ── Hidden by default — enable in Settings → Investments ──
+  { key:'Fixed Deposit', label:'Fixed Deposit',     icon:'🏦', color:'#D97706', bg:'#FFFBEB', fieldTemplate:'General',     visible:false },
+  { key:'PPF/PF',        label:'PPF / PF / EPF',    icon:'📮', color:'#059669', bg:'#ECFDF5', fieldTemplate:'General',     visible:false },
+  { key:'NPS',           label:'NPS / Pension',     icon:'🧓', color:'#8B5CF6', bg:'#F3EEFF', fieldTemplate:'General',     visible:false },
+  { key:'Bonds',         label:'Bonds & T-Bills',   icon:'📜', color:'#64748B', bg:'#F1F5F9', fieldTemplate:'General',     visible:false },
+  { key:'Insurance',     label:'Insurance Policy',  icon:'🛡️', color:'#DC2626', bg:'#FEF2F2', fieldTemplate:'General',     visible:false },
 ];
 
 // INV_CATS kept as an alias for any legacy reads
@@ -3890,7 +3913,7 @@ const INV_CATS = DEFAULT_INV_CARDS;
 
 // General field template for savings/contribution-style investments (PF, NPS, FD etc.)
 const INV_FIELDS_GENERAL = [
-  {id:'inv-scheme',   label:'Scheme / Account',  type:'text',   placeholder:'e.g. VPF, NPS Tier-1',  full:true},
+  {id:'inv-scheme',   label:'Scheme / Account',  type:'text',   placeholder:'e.g. NPS Tier-1, PPF Account, 401k',  full:true},
   {id:'inv-contrib',  label:'Contribution',       type:'number', placeholder:'0.00',                  full:false, calc:true},
   {id:'inv-total-acc',label:'Total Accumulated',  type:'number', placeholder:'0.00 (optional)',        full:false},
   {id:'inv-rate',     label:'Interest / Return %',type:'number', placeholder:'e.g. 8.25',             full:false},
@@ -4350,7 +4373,7 @@ const INV_FIELDS = {
     {id:'inv-shares',  label:'Shares',            type:'number', placeholder:'0.00',              full:false, calc:true},
     {id:'inv-avgcost', label:'Avg Cost / Share',  type:'number', placeholder:'0.00',              full:false, calc:true},
     {id:'inv-curprice',label:'Current Price',     type:'number', placeholder:'0.00',              full:false},
-    {id:'inv-broker',  label:'Broker / Platform', type:'text',   placeholder:'e.g. Fidelity',     full:true},
+    {id:'inv-broker',  label:'Broker / Platform', type:'text',   placeholder:'e.g. Zerodha, Groww, Fidelity',     full:true},
   ],
   'Crypto': [
     {id:'inv-coin',    label:'Coin / Token',      type:'text',   placeholder:'e.g. BTC, ETH',     full:false},
@@ -7205,7 +7228,7 @@ const DEFAULT_EXPENSE_BUDGETS = [
 const DEFAULT_SAVINGS_BUDGETS = [
   // 📈 Investments & Savings
   { key:'Equity Investments',  name:'Equity Investments',  amount:0, linkedCats:['Stocks','ETF','Mutual Fund','SIP','Crypto'],         icon:'📈', type:'savings' },
-  { key:'Gold & Metals',       name:'Gold & Metals',        amount:0, linkedCats:['Gold','Silver','OneGold','OneSilver'],               icon:'🥇', type:'savings' },
+  { key:'Gold & Metals',       name:'Gold & Metals',        amount:0, linkedCats:['Gold','Silver','Gold & Metals','Metals'],               icon:'🥇', type:'savings' },
   { key:'Retirement Savings',  name:'Retirement Savings',   amount:0, linkedCats:['NPS','PPF','EPF','VPF','401k','IRA','Retirement'],   icon:'🏛️', type:'savings' },
   { key:'Fixed Income',        name:'Fixed Income',         amount:0, linkedCats:['FD','RD','Bonds','Fixed Deposit'],                   icon:'🏦', type:'savings' },
   { key:'Emergency Fund',      name:'Emergency Fund',       amount:0, linkedCats:['Emergency','Savings','Liquid'],                      icon:'🛡️', type:'savings' },
@@ -10594,7 +10617,7 @@ const COACH_STEPS = [
   {
     screen: 'home',
     elementId: 'fab-add-btn',
-    tag: 'Quick Add · Step 1 of 9',
+    tag: 'Quick Add · Step 1 of 11',
     title: '➕ The Add Button',
     desc: 'This golden ＋ button is your fastest way in. Tap it from any screen to log an expense, income, or investment in seconds.',
     arrow: 'down'
@@ -10602,7 +10625,7 @@ const COACH_STEPS = [
   {
     screen: 'home',
     elementId: 'fmi-expense',
-    tag: 'Quick Add · Step 2 of 9',
+    tag: 'Quick Add · Step 2 of 11',
     title: '💸 Log an Expense',
     desc: 'Tap 💸 Expense to record spending. Pick a category, enter the amount and description — done in under 10 seconds.',
     arrow: 'right',
@@ -10613,14 +10636,38 @@ const COACH_STEPS = [
     }
   },
   {
+    screen: 'home',
+    elementId: 'tx-search-input',
+    tag: 'Recurring · Step 3 of 11',
+    title: '🔁 Recurring Transactions',
+    desc: 'Long-press any transaction to make it recurring — weekly, biweekly or monthly. MoneyFi auto-posts it every period. Perfect for salary, rent, subscriptions.',
+    arrow: 'down',
+    preAction: () => {
+      const menu = document.getElementById('fab-menu');
+      const fab  = document.getElementById('fab-add-btn');
+      if (fab && menu && menu.classList.contains('open')) fab.click();
+      switchScreen('home', document.querySelector('.nav-item:nth-child(1)'));
+    }
+  },
+  {
+    screen: 'home',
+    elementId: 'author-toggle-btn',
+    tag: 'Family · Step 4 of 11',
+    title: '👨‍👩‍👧 Family View',
+    desc: 'Tap the people icon to filter transactions by family member. See just your entries, or your partner\'s — everyone adds to the same shared ledger.',
+    arrow: 'down',
+    preAction: () => {
+      switchScreen('home', document.querySelector('.nav-item:nth-child(1)'));
+    }
+  },
+  {
     screen: 'budget',
     elementId: 'btab-goals',
-    tag: 'Budget & Goals · Step 3 of 9',
+    tag: 'Budget & Goals · Step 5 of 11',
     title: '🎯 Goals Tab',
     desc: 'Switch to Goals here to set financial milestones — save for a house, pay off a loan, build an emergency fund.',
     arrow: 'down',
     preAction: () => {
-      // Close fab menu if open
       const menu = document.getElementById('fab-menu');
       const fab  = document.getElementById('fab-add-btn');
       if (fab && menu && menu.classList.contains('open')) fab.click();
@@ -10630,7 +10677,7 @@ const COACH_STEPS = [
   {
     screen: 'budget',
     elementId: 'goals-fab-btn',
-    tag: 'Budget & Goals · Step 4 of 9',
+    tag: 'Budget & Goals · Step 6 of 11',
     title: '＋ Add a Goal',
     desc: 'Tap this to create a new goal. Choose Grow (build savings) or Reduce (pay down debt). Map your accounts to track progress automatically.',
     arrow: 'up',
@@ -10641,7 +10688,7 @@ const COACH_STEPS = [
   {
     screen: 'networth',
     elementId: 'nw-total',
-    tag: 'Net Worth · Step 5 of 9',
+    tag: 'Net Worth · Step 7 of 11',
     title: '💎 Your Net Worth',
     desc: 'This is the big number — total assets minus total liabilities. It updates live as you add accounts and transactions.',
     arrow: 'down',
@@ -10653,7 +10700,7 @@ const COACH_STEPS = [
     screen: 'networth',
     // Target the always-visible section header, not the collapsible body
     elementId: 'nw-sec-checking',
-    tag: 'Net Worth · Step 6 of 9',
+    tag: 'Net Worth · Step 8 of 11',
     title: '🏦 Add Accounts',
     desc: 'Tap any row to expand it, then tap "+ Add Account" inside. Add checking, savings, real estate, loans — each category stays organised.',
     arrow: 'up',
@@ -10662,7 +10709,7 @@ const COACH_STEPS = [
   {
     screen: 'metals',
     elementId: 'mini-gold',
-    tag: 'Metals · Step 7 of 9',
+    tag: 'Metals · Step 9 of 11',
     title: '🥇 Gold, Silver & Platinum',
     desc: 'Switch between metals using these cards. Each shows your total weight and current estimated value based on your set prices.',
     arrow: 'down',
@@ -10671,7 +10718,7 @@ const COACH_STEPS = [
   {
     screen: 'metals',
     elementId: 'metal-live-price',
-    tag: 'Metals · Step 8 of 9',
+    tag: 'Metals · Step 10 of 11',
     title: '✏️ Set Your Own Price',
     desc: 'Tap Edit next to this price to override it. You can set a base rate AND a specific price per purity — 22K vs 24K gold will differ.',
     arrow: 'down'
@@ -10679,7 +10726,7 @@ const COACH_STEPS = [
   {
     screen: 'settings',
     elementId: 'fx-rates-list',
-    tag: 'Settings · Step 9 of 9',
+    tag: 'Settings · Step 11 of 11',
     title: '💱 FX Rate Overrides',
     desc: 'Every foreign currency in your data appears here. Tap ✏️ Set on any row to correct the rate — all your valuations update instantly.',
     arrow: 'up',
