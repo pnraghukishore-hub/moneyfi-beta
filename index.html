@@ -544,8 +544,8 @@
 
     /* ── MODAL (shared) ── */
     .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.3); z-index: 200; backdrop-filter: blur(4px); }
-    .modal-overlay.open { display: flex; align-items: flex-end; }
-    .modal { background: var(--white); border-radius: 24px 24px 0 0; padding: 24px 20px; width: 100%; max-height: 92vh; overflow-y: auto; animation: slideUp 0.3s ease; }
+    .modal-overlay.open { display: flex; align-items: flex-end; justify-content: center; }
+    .modal { background: var(--white); border-radius: 24px 24px 0 0; padding: 24px 20px; width: 100%; max-width: 480px; max-height: 92vh; overflow-y: auto; animation: slideUp 0.3s ease; }
     @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
     .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
     .modal-title { font-size: 1.1em; font-weight: 900; color: var(--text-dark); }
@@ -10375,7 +10375,11 @@ function renderResetSummary() {
 function renderMonthsList() {
   const el = document.getElementById('months-list');
   if (!el) return;
-  const monthKeys = Object.keys(data).filter(k => !k.startsWith('_') && /^\d{4}-\d{2}$/.test(k)).sort().reverse();
+  const ALL_TX_TYPES = ['expenses','income','investments','debts','givenToOthers','additional'];
+  const hasTransactions = mk => ALL_TX_TYPES.some(t => (data[mk]?.[t]||[]).length > 0);
+  const monthKeys = Object.keys(data)
+    .filter(k => !k.startsWith('_') && /^\d{4}-\d{2}$/.test(k) && hasTransactions(k))
+    .sort().reverse();
   if (!monthKeys.length) { el.innerHTML = '<p style="color:var(--text-light);font-size:0.85em;padding:4px 0;">No month data yet.</p>'; return; }
 
   // Group by year
