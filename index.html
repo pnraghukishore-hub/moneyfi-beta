@@ -3800,17 +3800,34 @@ function renderInvestHome(investments) {
     const type = inv.investType||inv.category||'Stocks';
     totals[type]=(totals[type]||0)+convertAmt(inv.amount, inv.currency);
   });
-  // Note: data._investments (portfolio positions) also excluded from monthly total —
-  // portfolio value ≠ amount invested this month.
 
   const grandTotal = Object.values(totals).reduce((s,v)=>s+v,0);
   document.getElementById('home-invest-total').textContent = fmt(grandTotal);
 
-  // Use dynamic cards
+  // Use dynamic cards — support subcats[] just like spend cards
   const cards = getHomeInvCards().filter(c=>c.visible!==false);
   const grid = document.getElementById('invest-cat-grid');
   grid.innerHTML = cards.map(card=>{
-    const amt = totals[card.key]||0;
+    const subcats = card.subcats||[];
+    // Match: (1) explicit subcats, (2) exact key, (3) any total key that matches card key case-insensitively
+    let amt;
+    if (subcats.length > 0) {
+      amt = subcats.reduce((s,sc)=>s+(totals[sc]||0),0);
+    } else {
+      // Exact key first
+      amt = totals[card.key] || 0;
+      // Also accumulate any total whose key starts with or equals card.key (case-insensitive)
+      // e.g. card.key='Onegold' catches category='OneGold','onegold','Gold','Onegold' etc.
+      if (amt === 0) {
+        const cardKeyLow = card.key.toLowerCase();
+        Object.entries(totals).forEach(([k,v]) => {
+          const kl = k.toLowerCase();
+          if (kl === cardKeyLow || kl.includes(cardKeyLow) || cardKeyLow.includes(kl)) {
+            amt += v;
+          }
+        });
+      }
+    }
     const pct = grandTotal>0?Math.min(amt/grandTotal*100,100):0;
     return `<div class="invest-cat-card" style="background:${card.bg||'#F8F8F8'};user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;"
       ontouchstart="homeCardTouchStart(event,'${card.key}','investment','${card.key}')"
@@ -4133,13 +4150,17 @@ function qaSave() {
       const mType  = entry.metalType;
       const mk     = getMonthKey(date) || getCurrentMonthKey();
       const shortMonthTag = new Date((date||localDateStr())+'T00:00:00').toLocaleDateString('en-US',{month:'short',year:'2-digit'});
-      // Price per gram from the investment amount (amount / grams)
+      // Price per gram in the transaction's own currency (not converted)
       const pricePerGram = finalAmt > 0 ? finalAmt / grams : (METAL_CONFIG[mType]||{}).pricePerGram || 0;
+      // Shared link ID so deleting either side can remove the other
+      const _linkId = 'inv_metal_' + Date.now() + '_' + Math.random().toString(36).slice(2,7);
+      entry._metalLinkId = _linkId;   // written to the investment transaction too
       data._metals.push({
         metalType: mType,
         name: note || (qaSubCat || mType),
         grams: parseFloat(grams.toFixed(4)),
-        price: parseFloat(pricePerGram.toFixed(4)),
+        price: parseFloat(pricePerGram.toFixed(4)),       // purchase price per gram in _purchaseCurrency
+        _purchaseCurrency: currentCurrency.code,          // so display can show correct symbol
         date: normalizeDate(date),
         form: 'ETF / Digital',
         notes: '',
@@ -4148,6 +4169,7 @@ function qaSave() {
         _fromInvesting: true,       // marks this as auto-created from investing
         _invMonth: shortMonthTag,   // e.g. "Feb '26" — shown as tag like Imported
         _invMonthKey: mk,
+        _linkId,                    // used for two-way delete propagation
       });
       _metalEntryAdded = true;
     }
@@ -6539,7 +6561,16 @@ function renderMetals() {
     const usdVal=grams*price;
     const oz=(grams/31.1035).toFixed(3);
     const purityTag = purity ? `<span style="background:#F5F5F5;border-radius:5px;padding:1px 6px;font-size:0.75em;font-weight:700;color:#7C3AED;">${purity}</span>` : '';
-    const priceTag = `<span style="color:var(--text-light);font-size:0.75em;">$${price.toFixed(2)}/g</span>`;
+    // Show live price in display currency (always computed from live USD price converted to display)
+    const livePriceDisp = convertAmt(price, 'USD'); // price is always USD/g from getPriceForMetal
+    const priceTag = `<span style="color:var(--text-light);font-size:0.75em;">${fmt(livePriceDisp)}/g (live)</span>`;
+    // For investing-sourced entries, also show the purchase cost per gram
+    let purchaseCostTag = '';
+    if (m._fromInvesting && m.price > 0 && m._purchaseCurrency) {
+      // price stored in _purchaseCurrency per gram
+      const pCur = CURRENCIES.find(c=>c.code===m._purchaseCurrency)||{symbol:m._purchaseCurrency};
+      purchaseCostTag = ` · <span style="color:#7C3AED;font-size:0.75em;">paid ${pCur.symbol}${m.price.toFixed(0)}/g</span>`;
+    }
     const sourceTag = m._source==='networth'
       ? `<span style="font-size:0.7em;color:var(--text-light);"> · 📊 NW</span>`
       : m._fromInvesting
@@ -6547,7 +6578,7 @@ function renderMetals() {
         : '';
     const delBtn = m._source==='networth'
       ? `<button class="metal-holding-del" onclick="navigateTo('networth')" title="Edit in Net Worth">↗️</button>`
-      : `<button class="metal-holding-del" onclick="deleteMetalEntry(${metals.indexOf(m)})">✕</button>`;
+      : `<button class="metal-holding-del" onclick="deleteMetalEntryByLink(${JSON.stringify(m._linkId||null)},${metals.indexOf(m)})">✕</button>`;
     return `<div class="metal-holding-item">
       <div class="metal-holding-badge ${currentMetal}">${ac.emoji}</div>
       <div class="metal-holding-main">
@@ -6555,11 +6586,16 @@ function renderMetals() {
           <span class="metal-holding-name-text">${m.name||m.itemName||'Unnamed'}</span>
           ${purityTag}
         </div>
-        <div class="metal-holding-bottom">${grams.toFixed(2)}g · ${oz}oz ${priceTag}${m.occasion?' · '+m.occasion:''}${m.notes?' · '+m.notes:''}${sourceTag}</div>
+        <div class="metal-holding-bottom">${grams.toFixed(2)}g · ${oz}oz ${priceTag}${purchaseCostTag}${m.occasion?' · '+m.occasion:''}${m.notes?' · '+m.notes:''}${sourceTag}</div>
       </div>
       <div class="metal-holding-right">
         <div class="metal-holding-value">${fmt(convertAmt(usdVal,'USD'))}</div>
-        <div class="metal-holding-weight">${grams.toFixed(2)} g</div>
+        ${m._fromInvesting && m.price > 0 && m._purchaseCurrency
+          ? `<div style="font-size:0.68em;color:#7C3AED;font-weight:700;margin-top:1px;">
+               paid ${(()=>{ const pc=CURRENCIES.find(c=>c.code===m._purchaseCurrency)||{symbol:m._purchaseCurrency}; return pc.symbol; })()}${(m.price*grams).toLocaleString(undefined,{maximumFractionDigits:0})}
+             </div>`
+          : `<div class="metal-holding-weight">${grams.toFixed(2)} g</div>`
+        }
       </div>
       ${delBtn}
     </div>`;
@@ -6574,7 +6610,49 @@ function addMetalEntry() {
   addPanelOpen=false; document.getElementById('metal-add-panel-body').classList.remove('open'); document.getElementById('add-panel-toggle').textContent='+';
   showToast(METAL_CONFIG[currentMetal].emoji+' '+METAL_CONFIG[currentMetal].label+' entry added!');
 }
-function deleteMetalEntry(idx) { if(!confirm('Delete this entry?')) return; data._metals.splice(idx,1); save(); renderMetals(); showToast('Entry deleted'); }
+function deleteMetalEntry(idx) {
+  const entry = (data._metals||[])[idx];
+  if (!entry) return;
+  const isLinked = !!entry._linkId;
+  const confirmMsg = isLinked
+    ? 'Delete this metal entry and the linked investing transaction?'
+    : 'Delete this metal entry?';
+  if (!confirm(confirmMsg)) return;
+
+  // Remove the metals entry
+  data._metals.splice(idx, 1);
+
+  // If it was auto-created from an investing transaction, remove that too
+  if (isLinked) {
+    const linkId = entry._linkId;
+    const typeMap = { expense:'expenses', income:'income', investment:'investments',
+                      debt:'debts', given:'givenToOthers', additional:'additional' };
+    let txRemoved = false;
+    Object.keys(data).filter(mk => /^\d{4}-\d{2}$/.test(mk)).forEach(mk => {
+      const invList = (data[mk].investments || []);
+      const beforeLen = invList.length;
+      data[mk].investments = invList.filter(t => t._metalLinkId !== linkId);
+      if (data[mk].investments.length < beforeLen) txRemoved = true;
+    });
+    save();
+    renderMetals();
+    renderTransactions();
+    if (typeof renderHome === 'function') renderHome();
+    showToast(txRemoved ? '🗑 Metal entry + investing transaction deleted' : '🗑 Metal entry deleted');
+  } else {
+    save();
+    renderMetals();
+    showToast('Entry deleted');
+  }
+}
+
+function deleteMetalEntryByLink(linkId, fallbackIdx) {
+  // Find the index by _linkId first (most reliable), fall back to positional index
+  const idx = linkId
+    ? (data._metals||[]).findIndex(m => m._linkId === linkId)
+    : fallbackIdx;
+  deleteMetalEntry(idx >= 0 ? idx : fallbackIdx);
+}
 
 // Delete an imported metal entry directly from NW screen
 function deleteImportedMetal(idx) {
