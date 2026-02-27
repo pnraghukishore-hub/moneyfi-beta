@@ -2995,8 +2995,15 @@
             </select>
           </div>
         </div>
-        <div style="font-size:0.68em;color:#A07800;font-weight:700;margin-top:8px;line-height:1.5;">
-          💡 Records <strong>this month's purchase</strong> for budget tracking. Your total holdings in Net Worth are separate — update them there when you want a snapshot.
+        <div style="margin-top:8px;">
+          <div style="font-size:0.68em;font-weight:800;color:var(--text-light);margin-bottom:4px;">PURITY</div>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <input type="text" id="qa-metal-purity" placeholder="e.g. 22K, 24K, 999" 
+              style="flex:1;background:var(--white);border:1.5px solid #E8E8E8;border-radius:9px;padding:8px 10px;font-family:Nunito,sans-serif;font-weight:800;font-size:0.9em;outline:none;">
+            <button onclick="document.getElementById('qa-metal-purity').value='24K'" style="background:white;border:1.5px solid #E8E8E8;border-radius:8px;padding:5px 8px;font-size:0.72em;font-weight:800;color:var(--text-dark);cursor:pointer;">24K</button>
+            <button onclick="document.getElementById('qa-metal-purity').value='22K'" style="background:white;border:1.5px solid #E8E8E8;border-radius:8px;padding:5px 8px;font-size:0.72em;font-weight:800;color:var(--text-dark);cursor:pointer;">22K</button>
+            <button onclick="document.getElementById('qa-metal-purity').value='18K'" style="background:white;border:1.5px solid #E8E8E8;border-radius:8px;padding:5px 8px;font-size:0.72em;font-weight:800;color:var(--text-dark);cursor:pointer;">18K</button>
+          </div>
         </div>
       </div>
     </div>
@@ -4202,7 +4209,7 @@ function qaSave() {
       name: entry.description || (entry.category && entry.category !== entry.metalType ? entry.category : null) || (METAL_CONFIG[entry.metalType||'gold']||{}).label || 'Gold',
       grams: entry.metalGrams,
       price: amount / entry.metalGrams,
-      purity: '',
+      purity: (document.getElementById('qa-metal-purity')||{}).value||'',
       date: entry.date,
       form: 'Purchase',
       notes: entry.description || '',
@@ -4257,6 +4264,7 @@ function qaSave() {
   document.getElementById('qa-amount-display').value = '0';
   document.getElementById('qa-note-input').value = '';
   const _mg2 = document.getElementById('qa-metal-grams'); if (_mg2) _mg2.value = '';
+  const _mp2 = document.getElementById('qa-metal-purity'); if (_mp2) _mp2.value = '';
   const _mf2 = document.getElementById('qa-metal-fields'); if (_mf2) _mf2.style.display = 'none';
   // Reset recurring UI
   const _rc = document.getElementById('qa-recurring-check'); if (_rc) _rc.checked = false;
@@ -6775,8 +6783,7 @@ function renderMetalHoldingRow(m, idx) {
   const sourceTag = m._source==='networth' ? `<span style="font-size:0.7em;color:var(--text-light);"> · 📊 NW</span>` : '';
   const paidCostUSD = (m.price && m.price > 0) ? m.price * grams : 0;
   const paidTag = paidCostUSD > 0 ? `<div style="font-size:0.7em;color:#7C3AED;font-weight:700;margin-top:1px;">paid ${fmt(convertAmt(paidCostUSD,'USD'))}</div>` : '';
-  const fromMonthLabel = m._fromMonth ? (()=>{ const d=new Date(m._fromMonth+'-01'); return d.toLocaleDateString('en-US',{month:'short'})+" '"+String(d.getFullYear()).slice(2); })() : '';
-  const qaTag = m._fromQA ? `<span style="font-size:0.65em;background:#EDE9FE;color:#7C3AED;border-radius:4px;padding:2px 6px;margin-left:4px;font-weight:700;">📱 ${fromMonthLabel}</span>` : '';
+  const qaTag = ''; // Propagation is seamless — no need to show source chip
   const delBtn = m._source==='networth'
     ? `<button class="metal-holding-del" onclick="navigateTo('networth')" title="Manage in Net Worth">↗️</button>`
     : `<button class="metal-holding-del" onclick="deleteMetalEntry(${m._metalIdx})" title="Delete">✕</button>`;
