@@ -1619,7 +1619,7 @@
       <div style="font-size:0.72em;color:var(--text-light);" id="metal-price-base-label">$/gram (24K pure)</div>
       <div style="display:flex;align-items:center;gap:6px;">
         <span style="font-size:1.3em;font-weight:900;color:var(--text-dark);" id="metal-live-price">$96.50</span>
-        <button onclick="showMetalPriceEdit()" style="background:#F0F4FF;border:none;border-radius:7px;padding:3px 8px;font-size:0.72em;font-weight:800;color:var(--primary);cursor:pointer;">✏️ Edit</button>
+        <button onclick="showMetalPriceEdit()" style="background:#F0F4FF;border:none;border-radius:7px;padding:3px 8px;font-size:0.72em;font-weight:800;color:var(--primary);cursor:pointer;">⚙️ Price</button>
       </div>
       <div id="metal-price-override-panel" style="display:none;margin-top:8px;background:white;border:1.5px solid #DDD;border-radius:10px;padding:10px 12px;text-align:left;">
         <div style="font-size:0.78em;font-weight:800;color:var(--text-dark);margin-bottom:6px;" id="metal-price-override-label">Set base $/gram:</div>
@@ -4147,6 +4147,27 @@ function qaSave() {
   }
   save();
 
+  // F: If metal investment — auto-create matching _metals portfolio entry
+  if (isMetal && entry.metalGrams && entry.metalGrams > 0) {
+    if (!data._metals) data._metals = [];
+    const metalEntry = {
+      metalType: entry.metalType || 'gold',
+      name: entry.category || entry.metalType || 'Gold',
+      grams: entry.metalGrams,
+      price: amount / entry.metalGrams, // price per gram in original currency
+      purity: '',
+      date: entry.date,
+      form: 'Purchase',
+      notes: entry.description || '',
+      _fromQA: true,
+      _fromMonth: monthKey,  // e.g. "2026-02"
+      _fromQAMonth: monthKey,
+      _fromQAIdx: (data[monthKey][typeMap[qaType]].length - 1), // last pushed entry
+    };
+    data._metals.push(metalEntry);
+    save();
+  }
+
   // Build toast message
   let toastMsg = '✅ Saved!';
   if (isMetal && entry.metalGrams) {
@@ -4968,6 +4989,7 @@ function calChangeMonth(dir) {
   const [y,m] = viewMonth.split('-').map(Number);
   const d = new Date(y, m-1+dir, 1);
   viewMonth = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  budgetViewMonth = viewMonth; // A: keep budget always in sync
   // Refresh list view if active
   if (calViewMode === 'list') { const lv=document.getElementById('cal-list-view'); if(lv&&lv.style.display!=='none') renderCalListView(lv); }
   const topbarMonth = document.getElementById('topbar-month');
@@ -5129,6 +5151,12 @@ function renderTransactions() {
 
   const calGrid = document.getElementById('cal-grid');
   if(calGrid) calGrid.innerHTML = cells;
+  // B: Auto-select most recent day that has transactions (not just today)
+  if (!calSelectedDay) {
+    const datesWithTx = Object.keys(byDate).sort().reverse();
+    const todayStr = localDateStr();
+    calSelectedDay = datesWithTx.includes(todayStr) ? todayStr : (datesWithTx[0] || todayStr);
+  }
   renderCalDayDetail(visibleTx);
 }
 
@@ -5486,6 +5514,14 @@ function toggleAuthorChips() {
 
 function setAuthorFilter(author) {
   _authorFilter = author;
+  if (_txSearchActive) {
+    // H/E: Re-run active search with new author filter
+    const input = document.getElementById('tx-search-input');
+    if (input && input.value) {
+      onTxSearch(input.value);
+      return;
+    }
+  }
   renderTransactions(); // re-renders chips + day detail
 }
 
@@ -6486,7 +6522,7 @@ function renderMetals() {
   // Combine _metals + NW accounts for this metal type
   const nwMetalForType = (data._nwAccounts||[]).filter(a=>a.type==='metals'&&a.meta&&a.meta.metalType===currentMetal);
   const allEntries = [
-    ...active.entries.map(m => ({ ...m, _source: 'portfolio' })),
+    ...active.entries.map((m,i) => ({ ...m, _source: 'portfolio', _metalIdx: (data._metals||[]).indexOf(m) })),
     ...nwMetalForType.map(a => ({
       name: a.name, grams: Number(a.meta.grams||0), price: 0,
       purity: a.meta.purity||'', occasion: a.meta.occasion||'', form: a.meta.form||'',
@@ -6503,24 +6539,29 @@ function renderMetals() {
     const usdVal=grams*price;
     const oz=(grams/31.1035).toFixed(3);
     const purityTag = purity ? `<span style="background:#F5F5F5;border-radius:5px;padding:1px 6px;font-size:0.75em;font-weight:700;color:#7C3AED;">${purity}</span>` : '';
-    const priceTag = `<span style="color:var(--text-light);font-size:0.75em;">$${price.toFixed(2)}/g</span>`;
+    const priceTag = `<span style="color:var(--text-light);font-size:0.75em;">$${price.toFixed(2)}/g <span style="color:#10B981;font-size:0.85em;font-weight:800;">live</span></span>`;
+    const paidCostUSD = (m.price && m.price > 0) ? m.price * grams : 0;
+    const paidTag = paidCostUSD > 0 ? `<div style="font-size:0.7em;color:#7C3AED;font-weight:700;margin-top:1px;">paid ${fmt(convertAmt(paidCostUSD,'USD'))}</div>` : '';
+    const qaTag = m._fromQA ? `<span style="font-size:0.65em;background:#EDE9FE;color:#7C3AED;border-radius:4px;padding:1px 5px;margin-left:4px;">📱 ${m._fromMonth||'Investing'}</span>` : '';
     const sourceTag = m._source==='networth' ? `<span style="font-size:0.7em;color:var(--text-light);"> · 📊 NW</span>` : '';
     const delBtn = m._source==='networth'
-      ? `<button class="metal-holding-del" onclick="navigateTo('networth')" title="Edit in Net Worth">↗️</button>`
-      : `<button class="metal-holding-del" onclick="deleteMetalEntry(${metals.indexOf(m)})">✕</button>`;
+      ? `<button class="metal-holding-del" onclick="navigateTo('networth')" title="Manage in Net Worth">↗️</button>`
+      : `<button class="metal-holding-del" onclick="deleteMetalEntry(${m._metalIdx})" title="Delete">✕</button>`;
     return `<div class="metal-holding-item">
       <div class="metal-holding-badge ${currentMetal}">${ac.emoji}</div>
       <div class="metal-holding-main">
         <div class="metal-holding-top">
           <span class="metal-holding-name-text">${m.name||m.itemName||'Unnamed'}</span>
-          ${purityTag}
+          ${purityTag}${qaTag||''}
         </div>
         <div class="metal-holding-bottom">${grams.toFixed(2)}g · ${oz}oz ${priceTag}${m.occasion?' · '+m.occasion:''}${m.notes?' · '+m.notes:''}${sourceTag}</div>
       </div>
       <div class="metal-holding-right">
         <div class="metal-holding-value">${fmt(convertAmt(usdVal,'USD'))}</div>
         <div class="metal-holding-weight">${grams.toFixed(2)} g</div>
+        ${paidTag||''}
       </div>
+      <button class="metal-holding-del" onclick="openEditMetalSheet(${m._metalIdx})" title="Edit" style="color:#4A9EFF;">${m._source==='portfolio'?'✏️':''}</button>
       ${delBtn}
     </div>`;
   }).join('');
@@ -6534,7 +6575,21 @@ function addMetalEntry() {
   addPanelOpen=false; document.getElementById('metal-add-panel-body').classList.remove('open'); document.getElementById('add-panel-toggle').textContent='+';
   showToast(METAL_CONFIG[currentMetal].emoji+' '+METAL_CONFIG[currentMetal].label+' entry added!');
 }
-function deleteMetalEntry(idx) { if(!confirm('Delete this entry?')) return; data._metals.splice(idx,1); save(); renderMetals(); showToast('Entry deleted'); }
+function deleteMetalEntry(idx) {
+  if (idx < 0 || idx >= (data._metals||[]).length) { showToast('Cannot find entry ❌'); return; }
+  if (!confirm('Delete this metal entry?')) return;
+  const entry = data._metals[idx];
+  // D: If linked to a QA investment transaction, delete that too
+  if (entry && entry._fromQAMonth && entry._fromQAIdx !== undefined) {
+    const mk = entry._fromQAMonth;
+    if (data[mk] && data[mk].investments) {
+      data[mk].investments.splice(entry._fromQAIdx, 1);
+    }
+  }
+  data._metals.splice(idx, 1);
+  save(); renderMetals(); renderNetWorth();
+  showToast('🗑 Entry deleted');
+}
 
 // Delete an imported metal entry directly from NW screen
 function deleteImportedMetal(idx) {
@@ -6573,6 +6628,9 @@ function openEditMetalSheet(idx) {
     grams: g, weightGms: g,
   };
   save(); renderNetWorth(); renderMetals();
+  // C1: Close any open sheet after edit
+  const _sheet = document.getElementById('nw-sheet');
+  if (_sheet) _sheet.classList.remove('open');
   showToast('✅ Metal entry updated');
 }
 
@@ -7424,9 +7482,11 @@ function getBudgetActual(goal, monthKey) {
   let total = 0;
   ['expenses', 'investments', 'additional'].forEach(listKey => {
     (m[listKey] || []).forEach(e => {
-      const ec = (e.category || '').toLowerCase().trim();
-      // Exact match only — prevents 'parent' matching 'parents', 'gold' matching 'onegold' etc.
-      if (cats.some(c => ec === c)) {
+      const ec  = (e.category   || '').toLowerCase().trim();
+      const eit = (e.investType || '').toLowerCase().trim(); // G: also check investType
+      const esc = (e.subCategory|| '').toLowerCase().trim();
+      // Match on category OR investType OR subCategory
+      if (cats.some(c => ec === c || eit === c || esc === c)) {
         total += convertAmt(e.amount, e.currency);
       }
     });
@@ -7788,9 +7848,11 @@ function _renderBudgetDetail(prefix, goal, type) {
   let txns   = [];
   ['expenses', 'investments', 'additional'].forEach(listKey => {
     (m[listKey] || []).forEach(e => {
-      const ec = (e.category || '').toLowerCase().trim();
-      // Exact match — keep in sync with getBudgetActual
-      if (cats.some(c => ec === c)) txns.push({ ...e, _type: listKey });
+      const ec  = (e.category    || '').toLowerCase().trim();
+      const eit = (e.investType  || '').toLowerCase().trim();
+      const esc = (e.subCategory || '').toLowerCase().trim();
+      // G: match category OR investType OR subCategory
+      if (cats.some(c => ec === c || eit === c || esc === c)) txns.push({ ...e, _type: listKey });
     });
   });
   txns.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
