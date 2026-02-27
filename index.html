@@ -6926,6 +6926,12 @@ function openEditMetalSheet(idx) {
           <input id="me-purity" placeholder="Purity e.g. 22K" style="padding:10px 12px;border:1.5px solid #E8E8E8;border-radius:10px;font-family:Nunito,sans-serif;font-weight:700;font-size:0.9em;">
         </div>
         <input id="me-occasion" placeholder="Occasion (e.g. Wedding)" style="width:100%;padding:10px 12px;border:1.5px solid #E8E8E8;border-radius:10px;font-family:Nunito,sans-serif;font-weight:700;font-size:0.9em;box-sizing:border-box;">
+        <div style="position:relative;">
+          <input id="me-price" type="number" placeholder="Purchase price / gram (optional)" step="0.01" min="0"
+            style="width:100%;padding:10px 12px 10px 36px;border:1.5px solid #E8E8E8;border-radius:10px;font-family:Nunito,sans-serif;font-weight:700;font-size:0.9em;box-sizing:border-box;">
+          <span id="me-price-sym" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);font-weight:800;font-size:0.85em;color:#9AA0B2;">$</span>
+          <div style="font-size:0.62em;color:#9AA0B2;font-weight:700;margin-top:3px;padding-left:2px;">💡 Cost basis per gram — used for ROI calculation</div>
+        </div>
         <select id="me-type" style="width:100%;padding:10px 12px;border:1.5px solid #E8E8E8;border-radius:10px;font-family:Nunito,sans-serif;font-weight:700;font-size:0.9em;background:white;box-sizing:border-box;">
           <option value="gold">🥇 Gold</option>
           <option value="silver">🥈 Silver</option>
@@ -6941,7 +6947,11 @@ function openEditMetalSheet(idx) {
   document.getElementById('me-grams').value   = m.grams || m.weightGms || '';
   document.getElementById('me-purity').value  = m.purity || '';
   document.getElementById('me-occasion').value = m.occasion || '';
+  document.getElementById('me-price').value   = m.price || '';
   document.getElementById('me-type').value    = m.metalType || 'gold';
+  // Show correct currency symbol for price field
+  const symEl = document.getElementById('me-price-sym');
+  if (symEl) symEl.textContent = sym();
   modal.dataset.idx = idx;
   modal.style.display = 'flex';
 }
@@ -6956,10 +6966,15 @@ function saveMetalEdit() {
   const grams  = parseFloat(document.getElementById('me-grams').value);
   const purity = document.getElementById('me-purity').value.trim();
   const occasion = document.getElementById('me-occasion').value.trim();
+  const priceRaw = document.getElementById('me-price').value;
+  const price  = priceRaw !== '' ? parseFloat(priceRaw) : undefined;
   const type   = document.getElementById('me-type').value;
   if (!name) { showToast('Enter item name ❌'); return; }
   if (!grams || grams <= 0) { showToast('Enter valid weight ❌'); return; }
-  data._metals[idx] = { ...m, metalType:type, name, itemName:name, grams, weightGms:grams, purity, occasion };
+  const updatedEntry = { ...m, metalType:type, name, itemName:name, grams, weightGms:grams, purity, occasion };
+  if (price !== undefined && !isNaN(price) && price > 0) updatedEntry.price = price;
+  else if (price === 0) delete updatedEntry.price; // cleared explicitly → remove cost basis
+  data._metals[idx] = updatedEntry;
   save(); renderMetals(); renderNetWorth();
   modal.remove(); // Issue 5: close cleanly
   showToast('✅ Metal entry updated');
