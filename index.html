@@ -3969,6 +3969,7 @@ function qaRenderSubCats() {
     qaSubCat = cats[0] || '';
   }
   _renderQaPills(cats);
+  _qaToggleMetalFields(); // Issue 3: auto-show metal fields if metal category preselected
 }
 
 function _renderQaPills(cats) {
@@ -4172,7 +4173,7 @@ function qaSave() {
   let toastMsg = '✅ Saved!';
   if (isMetal && entry.metalGrams) {
     const mc = METAL_CONFIG[entry.metalType] || METAL_CONFIG['gold'];
-    toastMsg = `${mc.emoji} ${entry.metalGrams.toFixed(2)}g ${entry.metalType} · ${fmt(amount)} recorded`;
+    toastMsg = `${mc.emoji} ${entry.metalGrams.toFixed(2)}g ${entry.metalType} · ${fmt(amount)} · added to Metals & NW ✅`;
   }
 
   // Handle recurring rule creation
@@ -4926,13 +4927,7 @@ function renderCalListView(container) {
   const totalExp = exp.reduce((s,t)=>s+toDisp(t),0);
   const totalInv = inv.reduce((s,t)=>s+toDisp(t),0);
 
-  let html = `<div style="background:white;border-radius:14px;padding:12px 16px;margin-bottom:10px;box-shadow:var(--card-shadow);">
-    <div style="display:flex;justify-content:space-around;text-align:center;">
-      <div><div style="font-size:0.7em;font-weight:800;color:var(--text-light);text-transform:uppercase;">Income</div><div style="font-weight:900;color:var(--income);">${fmt(totalInc)}</div></div>
-      <div><div style="font-size:0.7em;font-weight:800;color:var(--text-light);text-transform:uppercase;">Expenses</div><div style="font-weight:900;color:var(--expenses);">${fmt(totalExp)}</div></div>
-      <div><div style="font-size:0.7em;font-weight:800;color:var(--text-light);text-transform:uppercase;">Investing</div><div style="font-weight:900;color:#7C3AED;">${fmt(totalInv)}</div></div>
-    </div>
-  </div>`;
+  let html = ''; // 2a: No summary tiles in list view — transactions only
 
   dateKeys.forEach(date => {
     const txns = byDate[date];
@@ -4952,13 +4947,16 @@ function renderCalListView(container) {
       const color = typeColors[t._type] || '#888';
       const label = typeLabels[t._type] || t._type;
       const prefix = t._type === 'income' ? '+' : '-';
-      html += `<div style="display:flex;align-items:center;gap:10px;padding:7px 12px;border-bottom:1px solid #F5F5F5;">
+      const tIdx = all.indexOf(t);
+      html += `<div style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid #F5F5F5;">
         <div style="width:7px;height:7px;border-radius:50%;background:${color};flex-shrink:0;"></div>
         <div style="flex:1;min-width:0;">
           <div style="font-weight:700;font-size:0.85em;color:var(--text-dark);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${t.description||t.category||'—'}</div>
           <div style="font-size:0.72em;font-weight:600;color:var(--text-light);">${t.category||''} · ${label}</div>
         </div>
-        <div style="font-weight:900;font-size:0.88em;color:${color};flex-shrink:0;">${prefix}${fmt(toDisp(t))}</div>
+        <div style="font-weight:900;font-size:0.88em;color:${color};flex-shrink:0;margin-right:4px;">${prefix}${fmt(toDisp(t))}</div>
+        <button onclick="listEditTx('${mk}','${t._type}',${t._idx})" style="background:#F0F4FF;border:none;border-radius:7px;padding:4px 7px;font-size:0.7em;color:var(--primary);cursor:pointer;flex-shrink:0;">✏️</button>
+        <button onclick="listDeleteTx('${mk}','${t._type}',${t._idx})" style="background:#FFF0F0;border:none;border-radius:7px;padding:4px 7px;font-size:0.7em;color:var(--expenses);cursor:pointer;flex-shrink:0;">✕</button>
       </div>`;
     });
     html += `</div>`;
@@ -5661,6 +5659,32 @@ function searchDeleteTx(monthKey, type, idx) {
   // Re-run the current search to refresh results
   const input = document.getElementById('tx-search-input');
   if (input && input.value) onTxSearch(input.value);
+}
+
+function listEditTx(monthKey, type, idx) {
+  // 2b: Edit from list view — switch to calendar view on that date, open edit
+  const typeMap = {expense:'expenses',income:'income',investment:'investments',debt:'debts',given:'givenToOthers',additional:'additional'};
+  const tx = data[monthKey] && data[monthKey][typeMap[type]] && data[monthKey][typeMap[type]][idx];
+  if (!tx) return;
+  setCalViewMode('calendar', document.querySelector('.cal-view-btn'));
+  calSelectedDay = tx.date || null;
+  viewMonth = monthKey;
+  renderTransactions();
+  setTimeout(() => openEditTx(monthKey, type, idx), 200);
+}
+function listDeleteTx(monthKey, type, idx) {
+  // 2b: Delete from list view
+  const typeMap = {expense:'expenses',income:'income',investment:'investments',debt:'debts',given:'givenToOthers',additional:'additional'};
+  const listKey = typeMap[type];
+  if (!data[monthKey] || !data[monthKey][listKey]) return;
+  const tx = data[monthKey][listKey][idx];
+  if (!tx) return;
+  if (!confirm(`Delete "${tx.category}" · ${fmt(Math.abs(tx.amount))}?`)) return;
+  data[monthKey][listKey].splice(idx, 1);
+  save(); renderHome();
+  showToast('🗑 Deleted');
+  const lv = document.getElementById('cal-list-view');
+  if (lv && lv.style.display !== 'none') renderCalListView(lv);
 }
 
 function clearTxSearch() {
@@ -6529,6 +6553,8 @@ function renderMetals() {
       date: a.lastUpdated||'', notes: a.meta.notes||'', _source: 'networth', _nwId: a.id
     }))
   ];
+  // Issue 6: Sort newest first
+  allEntries.sort((a,b) => (b.date||'').localeCompare(a.date||''));
   document.getElementById('holdings-list-count').textContent = allEntries.length + (allEntries.length===1?' entry':' entries');
   if(allEntries.length===0){hl.innerHTML=`<div class="metal-empty"><div class="metal-empty-icon">${ac.emoji}</div><div class="metal-empty-text">No ${ac.label.toLowerCase()} entries yet.<br>Tap + above to add one.</div></div>`;return;}
   hl.innerHTML=allEntries.map((m,idx)=>{
@@ -6604,33 +6630,60 @@ function deleteImportedMetal(idx) {
 function openEditMetalSheet(idx) {
   const m = (data._metals || [])[idx];
   if (!m) return;
-  // Navigate to Data screen → Metals section and open edit inline
-  // Simplest approach: open a quick edit modal pre-filled
-  const newType  = prompt('Metal type (gold/silver/platinum):', m.metalType || 'gold');
-  if (newType === null) return;
-  const newPurity  = prompt('Purity (e.g. 22K, 18K):', m.purity || '');
-  if (newPurity === null) return;
-  const newOccasion = prompt('Occasion (e.g. Wedding, Gift):', m.occasion || '');
-  if (newOccasion === null) return;
-  const newItem  = prompt('Item name:', m.itemName || m.name || '');
-  if (newItem === null) return;
-  const newGrams = prompt('Weight in grams:', m.grams || m.weightGms || '');
-  if (newGrams === null) return;
-  const g = parseFloat(newGrams);
-  if (!g || g <= 0) { showToast('Invalid weight ❌'); return; }
-  data._metals[idx] = {
-    ...m,
-    metalType: newType.toLowerCase().trim() || 'gold',
-    purity: newPurity.trim(),
-    occasion: newOccasion.trim(),
-    itemName: newItem.trim(),
-    name: newItem.trim() || newType,
-    grams: g, weightGms: g,
-  };
-  save(); renderNetWorth(); renderMetals();
-  // C1: Close any open sheet after edit
-  const _sheet = document.getElementById('nw-sheet');
-  if (_sheet) _sheet.classList.remove('open');
+  // Issue 5: Use inline modal instead of browser prompts
+  let modal = document.getElementById('metal-edit-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'metal-edit-modal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:flex-end;justify-content:center;';
+    modal.innerHTML = `<div style="background:white;border-radius:20px 20px 0 0;padding:24px 20px 32px;width:100%;max-width:480px;box-shadow:0 -8px 32px rgba(0,0,0,0.15);">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
+        <div style="font-weight:900;font-size:1.1em;color:#222;">✏️ Edit Metal Entry</div>
+        <button onclick="document.getElementById('metal-edit-modal').remove()" style="background:#F5F5F5;border:none;border-radius:50%;width:32px;height:32px;font-size:1.1em;cursor:pointer;">✕</button>
+      </div>
+      <div style="display:grid;gap:10px;">
+        <input id="me-name" placeholder="Item name" style="width:100%;padding:10px 12px;border:1.5px solid #E8E8E8;border-radius:10px;font-family:Nunito,sans-serif;font-weight:700;font-size:0.9em;box-sizing:border-box;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <input id="me-grams" type="number" placeholder="Weight (g)" step="0.001" min="0" style="padding:10px 12px;border:1.5px solid #E8E8E8;border-radius:10px;font-family:Nunito,sans-serif;font-weight:700;font-size:0.9em;">
+          <input id="me-purity" placeholder="Purity e.g. 22K" style="padding:10px 12px;border:1.5px solid #E8E8E8;border-radius:10px;font-family:Nunito,sans-serif;font-weight:700;font-size:0.9em;">
+        </div>
+        <input id="me-occasion" placeholder="Occasion (e.g. Wedding)" style="width:100%;padding:10px 12px;border:1.5px solid #E8E8E8;border-radius:10px;font-family:Nunito,sans-serif;font-weight:700;font-size:0.9em;box-sizing:border-box;">
+        <select id="me-type" style="width:100%;padding:10px 12px;border:1.5px solid #E8E8E8;border-radius:10px;font-family:Nunito,sans-serif;font-weight:700;font-size:0.9em;background:white;box-sizing:border-box;">
+          <option value="gold">🥇 Gold</option>
+          <option value="silver">🥈 Silver</option>
+          <option value="platinum">⬜ Platinum</option>
+        </select>
+        <button onclick="saveMetalEdit()" style="background:#10B981;color:white;border:none;border-radius:12px;padding:14px;font-weight:900;font-size:1em;cursor:pointer;font-family:Nunito,sans-serif;">✅ Save Changes</button>
+      </div>
+    </div>`;
+    document.body.appendChild(modal);
+  }
+  // Pre-fill fields
+  document.getElementById('me-name').value    = m.itemName || m.name || '';
+  document.getElementById('me-grams').value   = m.grams || m.weightGms || '';
+  document.getElementById('me-purity').value  = m.purity || '';
+  document.getElementById('me-occasion').value = m.occasion || '';
+  document.getElementById('me-type').value    = m.metalType || 'gold';
+  modal.dataset.idx = idx;
+  modal.style.display = 'flex';
+}
+
+function saveMetalEdit() {
+  const modal = document.getElementById('metal-edit-modal');
+  if (!modal) return;
+  const idx = parseInt(modal.dataset.idx);
+  const m = (data._metals || [])[idx];
+  if (!m) return;
+  const name   = document.getElementById('me-name').value.trim();
+  const grams  = parseFloat(document.getElementById('me-grams').value);
+  const purity = document.getElementById('me-purity').value.trim();
+  const occasion = document.getElementById('me-occasion').value.trim();
+  const type   = document.getElementById('me-type').value;
+  if (!name) { showToast('Enter item name ❌'); return; }
+  if (!grams || grams <= 0) { showToast('Enter valid weight ❌'); return; }
+  data._metals[idx] = { ...m, metalType:type, name, itemName:name, grams, weightGms:grams, purity, occasion };
+  save(); renderMetals(); renderNetWorth();
+  modal.remove(); // Issue 5: close cleanly
   showToast('✅ Metal entry updated');
 }
 
@@ -7436,9 +7489,8 @@ function budgetChangeMonth(dir) {
   budgetViewMonth = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
   viewMonth = budgetViewMonth; // keep global month in sync
   document.getElementById('budget-month-label').textContent = getDisplayMonth(budgetViewMonth);
-  // Update topbar month if visible
-  const topbarMonth = document.getElementById('topbar-month');
-  if (topbarMonth) topbarMonth.textContent = getDisplayMonth(budgetViewMonth);
+  // Issue 1: update ALL month labels so Home stays in sync
+  updatePeriodLabel();
   renderBudgetModule();
   // If detail pane is open, re-render it for the new month
   if (currentBudgetCatDetail) {
