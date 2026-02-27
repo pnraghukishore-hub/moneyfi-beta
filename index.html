@@ -82,6 +82,14 @@
       --bg: #E0F4FF; --bg-cream: #ECF9FF;
       background: #E0F4FF !important;
     }
+    body.theme-sunset {
+      --bg: #1C0F07; --bg-cream: #261508;
+      --text-dark: #F5E6D0; --text-med: #C4A882; --text-light: #8A6848;
+      --white: #2A1A0E;
+      --yellow: #E8943A; --yellow-light: #3A2010;
+      --primary: #E8943A; --primary-light: #3A2010;
+      background: #1C0F07 !important;
+    }
 
     body { font-family: 'Nunito', sans-serif; background: var(--bg); color: var(--text-dark); min-height: 100vh; position: relative; overflow-x: hidden; }
 
@@ -606,6 +614,9 @@
     .theme-card.space .tc-name, .theme-card.space .tc-desc { color: #C8C8FF; }
     /* Theme: Ocean */
     .theme-card.ocean { background: linear-gradient(135deg, #E0F4FF, #B3E5FC); }
+    .theme-card.sunset { background: linear-gradient(135deg, #3D1C08, #6B2F0A); color: #F5E6D0; }
+    .theme-card.sunset .tc-name { color: #F5E6D0; }
+    .theme-card.sunset .tc-desc { color: #C4A882; }
     /* Theme: Default */
     .theme-card.default { background: linear-gradient(135deg, #FFF9E6, #FFF0B0); }
 
@@ -628,6 +639,7 @@
     /* Ocean elements */
     .ocean-wave { position: fixed; pointer-events: none; font-size: 2em; animation: waveFloat 5s ease-in-out infinite; z-index: 0; opacity: 0; transition: opacity 0.5s; }
     body.theme-ocean .ocean-wave { opacity: 0.25; }
+    body.theme-sunset .sunset-glow { opacity: 0.4; }
     @keyframes waveFloat { 0%,100%{transform:translateX(0) rotate(0deg)} 50%{transform:translateX(15px) rotate(10deg)} }
 
     /* ── DECORATIVE ── */
@@ -1300,6 +1312,11 @@
 <div class="ocean-wave" style="top:200px;left:6px;animation-delay:1s;font-size:1.5em;">🌊</div>
 <div class="ocean-wave" style="bottom:340px;right:12px;animation-delay:2s;font-size:1.8em;">🐚</div>
 <div class="ocean-wave" style="top:320px;left:8px;animation-delay:0.5s;">🐟</div>
+<!-- Sunset -->
+<div class="sunset-glow" style="bottom:180px;right:10px;animation-delay:0s;">🌅</div>
+<div class="sunset-glow" style="top:180px;left:8px;animation-delay:1.2s;font-size:1.6em;">🔥</div>
+<div class="sunset-glow" style="bottom:320px;right:14px;animation-delay:0.6s;font-size:1.4em;">✨</div>
+<div class="sunset-glow" style="top:340px;left:6px;animation-delay:1.8s;font-size:1.2em;">🌙</div>
 
 <!-- ══ LOCK SCREEN — COMMENTED OUT (RE-ENABLE LATER) ══
 === To re-enable: uncomment this entire block and the JS PIN section below ===
@@ -1933,6 +1950,12 @@
           <div class="tc-preview">🐠🌊🐚</div>
           <div class="tc-name">Deep Ocean</div>
           <div class="tc-desc">Dive deep into your finances</div>
+          <div class="tc-active-badge">✓</div>
+        </div>
+        <div class="theme-card sunset" id="theme-sunset" onclick="setTheme('sunset')">
+          <div class="tc-preview">🌅🔥✨</div>
+          <div class="tc-name">Sunset Mode</div>
+          <div class="tc-desc">Warm dark — easy on the eyes</div>
           <div class="tc-active-badge">✓</div>
         </div>
       </div>
@@ -3557,7 +3580,7 @@ function showToast(msg, dur=2500) { const t=document.getElementById('toast'); t.
 // ══════════════════════════════════════════════════════
 function setTheme(theme) {
   // Remove all theme classes
-  document.body.classList.remove('theme-looney','theme-jungle','theme-space','theme-ocean');
+  document.body.classList.remove('theme-looney','theme-jungle','theme-space','theme-ocean','theme-sunset');
   if(theme !== 'default') document.body.classList.add('theme-'+theme);
   currentTheme = theme;
   localStorage.setItem('mf_theme', theme);
@@ -10512,19 +10535,24 @@ function clearDataset(type) {
 }
 
 function confirmResetAll() {
-  if (!confirm('⚠️ CLEAN RESTART\n\nThis deletes ALL transactions, metals, real estate, net worth, goals, recurring rules, and snapshots.\n\nYour card layout and category settings will be kept.\n\nAre you sure?')) return;
-  if (!confirm('🚨 Final confirmation — this cannot be undone. Delete everything?')) return;
+  if (!confirm('⚠️ CLEAN RESTART\n\nThis deletes ALL your data and resets cards + categories to defaults.\n\nYour currency, theme and family members will be kept.\n\nAre you sure?')) return;
+  if (!confirm('🚨 Final confirmation — this cannot be undone. Reset everything?')) return;
 
-  // Wipe all transaction months (YYYY-MM keys)
+  // Wipe ALL transaction months (YYYY-MM keys)
   Object.keys(data).filter(k => /^\d{4}-\d{2}$/.test(k)).forEach(k => delete data[k]);
 
-  // Wipe all _keys EXCEPT layout/settings prefs
-  const KEEP = ['_homeSpendCards','_homeInvCards','_customCats','_nwCustomTypes','_nwTypeVisible','_familyMembers'];
+  // Wipe ALL _keys — cards, categories, goals, everything resets to code defaults
+  // Only keep: currency preference, family roster (so members don't get kicked), NW type structure
+  const KEEP = ['_familyMembers', '_nwCustomTypes', '_nwTypeVisible'];
   Object.keys(data).filter(k => k.startsWith('_')).forEach(k => {
     if (!KEEP.includes(k)) delete data[k];
   });
+  // _homeSpendCards + _homeInvCards deliberately NOT in KEEP
+  // → getHomeSpendCards() / getHomeInvCards() will auto-return DEFAULT_* on next call
+  // _customCats deliberately NOT in KEEP → getCatsForType() returns DEFAULT_CATS
+  // _expenseGoals + _savingsGoals deliberately NOT in KEEP → getBudgetGoals() re-seeds defaults
 
-  // Do NOT wipe theme or currency — user wants to keep their display preferences
+  // Theme + currency stay (they are separate localStorage keys, not in data)
   save();
   try { renderResetSummary(); } catch(e) {}
   try { renderMonthsList(); } catch(e) {}
@@ -10533,7 +10561,7 @@ function confirmResetAll() {
   try { renderBudget(); } catch(e) {}
   try { renderNetWorth(); } catch(e) {}
   try { renderMetals(); } catch(e) {}
-  showToast('🧹 Clean restart complete — all data cleared', 3000);
+  showToast('🧹 Factory reset complete — fresh start ready', 3000);
 }
 
 // ══════════════════════════════════════════════════════
