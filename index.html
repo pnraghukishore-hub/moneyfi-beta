@@ -5407,6 +5407,14 @@ function renderTransactions() {
     calSelectedDay = datesWithTx.includes(todayStr) ? todayStr : (datesWithTx[0] || todayStr);
   }
   renderCalDayDetail(visibleTx);
+
+  // If currently in list view, refresh it too so author filter applies
+  if (calViewMode === 'list') {
+    const listView = document.getElementById('cal-list-view');
+    if (listView && listView.style.display !== 'none') {
+      renderCalListView(listView);
+    }
+  }
 }
 
 // ── Settings Accordion ──────────────────────────────────────────
@@ -5964,15 +5972,14 @@ function searchDeleteTx(monthKey, type, snapshotIdx, snapshotAmt, snapshotCat) {
 }
 
 function listEditTx(monthKey, type, idx) {
-  // 2b: Edit from list view — switch to calendar view on that date, open edit
   const typeMap = {expense:'expenses',income:'income',investment:'investments',debt:'debts',given:'givenToOthers',additional:'additional'};
   const tx = data[monthKey] && data[monthKey][typeMap[type]] && data[monthKey][typeMap[type]][idx];
   if (!tx) return;
-  setCalViewMode('calendar', document.querySelector('.cal-view-btn'));
+  // Switch to calendar mode, set the selected day, then open the edit sheet
   calSelectedDay = tx.date || null;
   viewMonth = monthKey;
-  renderTransactions();
-  setTimeout(() => openEditTx(monthKey, type, idx), 200);
+  setCalView('calendar'); // correct function name
+  setTimeout(() => openEditTx(monthKey, type, idx), 100);
 }
 function listDeleteTx(monthKey, type, idx) {
   const typeMap = {expense:'expenses',income:'income',investment:'investments',debt:'debts',given:'givenToOthers',additional:'additional'};
