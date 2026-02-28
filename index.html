@@ -1698,6 +1698,19 @@
       <div class="metal-holdings-title" id="holdings-list-title">🥇 Gold Holdings</div>
       <div class="metal-holdings-count" id="holdings-list-count">0 entries</div>
     </div>
+    <!-- Search bar -->
+    <div style="padding:10px 12px 4px;">
+      <div style="position:relative;">
+        <span style="position:absolute;left:11px;top:50%;transform:translateY(-50%);font-size:0.88em;color:#B0B8C8;pointer-events:none;">🔍</span>
+        <input id="metal-search-input" type="text" placeholder="Search by name, purity, occasion…"
+          oninput="renderMetals()"
+          style="width:100%;padding:9px 32px 9px 32px;border:1.5px solid #EBEBEB;border-radius:10px;font-family:Nunito,sans-serif;font-weight:700;font-size:0.82em;outline:none;box-sizing:border-box;background:#F8F8F8;color:var(--text-dark);"
+          onfocus="this.style.borderColor='var(--primary)';this.style.background='white'"
+          onblur="this.style.borderColor='#EBEBEB';this.style.background=this.value?'white':'#F8F8F8'">
+        <button id="metal-search-clear" onclick="document.getElementById('metal-search-input').value='';renderMetals();"
+          style="display:none;position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;font-size:0.85em;color:#B0B8C8;cursor:pointer;padding:2px 4px;font-weight:800;">✕</button>
+      </div>
+    </div>
     <div id="metals-holdings-list"><div class="metal-empty"><div class="metal-empty-icon">🥇</div><div class="metal-empty-text">No gold entries yet</div></div></div>
   </div>
 </div>
@@ -6653,7 +6666,14 @@ function restoreBackup(input) {
         '📦 Backup from: ' + exportedAt,
         '📅 ' + months.length + ' months of transactions',
         '💳 ' + txCount + ' total transactions',
-        '🥇 ' + metalsCount + ' metal entries',
+        '🥇 ' + metalsCount + ' metal entries' + (() => {
+          const withDate = (importedData._metals||[]).filter(m=>m.purchaseDate).length;
+          const withCost = (importedData._metals||[]).filter(m=>m.costBasisUSD > 0).length;
+          const parts = [];
+          if (withDate > 0) parts.push(withDate + ' with purchase date');
+          if (withCost > 0) parts.push(withCost + ' with cost basis');
+          return parts.length ? ' (' + parts.join(', ') + ')' : '';
+        })(),
         '💎 ' + nwCount + ' NW accounts',
         importedTheme ? '🎨 Theme: ' + importedTheme : '',
         importedCurrency ? '💱 Currency: ' + JSON.parse(importedCurrency).code : '',
@@ -7002,6 +7022,9 @@ function switchMetal(type) {
   // Close price panel when switching metals
   const panel = document.getElementById('metal-price-override-panel');
   if (panel) panel.style.display = 'none';
+  // Clear search when switching metal type
+  const srch = document.getElementById('metal-search-input');
+  if (srch) srch.value = '';
   renderMetals();
 }
 function renderMetals() {
@@ -7068,36 +7091,79 @@ function renderMetals() {
       date: a.lastUpdated||'', notes: a.meta.notes||'', _source: 'networth', _nwId: a.id
     }))
   ];
-  // Issue 6: Sort newest first
-  allEntries.sort((a,b) => (b.date||'').localeCompare(a.date||''));
+  // Sort newest first — prefer purchaseDate for ordering
+  allEntries.sort((a,b) => (b.purchaseDate||b.date||'').localeCompare(a.purchaseDate||a.date||''));
   renderMetalROI(); // ROI chart
   document.getElementById('holdings-list-count').textContent = allEntries.length + (allEntries.length===1?' entry':' entries');
   if(allEntries.length===0){hl.innerHTML=`<div class="metal-empty"><div class="metal-empty-icon">${ac.emoji}</div><div class="metal-empty-text">No ${ac.label.toLowerCase()} entries yet.<br>Tap + above to add one.</div></div>`;return;}
-  // Issue 8: Group entries by date — no-date at bottom with friendly label
-  const datedEntries   = allEntries.filter(m => m.date);
-  const undatedEntries = allEntries.filter(m => !m.date);
-  const byDateGroup = {};
+  // Group by PURCHASE MONTH (purchaseDate preferred, fallback m.date, no-date at bottom)
+  // Filter by search if active
+  const metalSearchQuery = (document.getElementById('metal-search-input')?.value || '').toLowerCase().trim();
+  // Show/hide clear button
+  const clrBtn = document.getElementById('metal-search-clear');
+  if (clrBtn) clrBtn.style.display = metalSearchQuery ? 'block' : 'none';
+  const filteredEntries = metalSearchQuery
+    ? allEntries.filter(m => {
+        const name = (m.itemName || m.name || '').toLowerCase();
+        const occasion = (m.occasion || '').toLowerCase();
+        const purity = (m.purity || '').toLowerCase();
+        const notes = (m.notes || '').toLowerCase();
+        return name.includes(metalSearchQuery) || occasion.includes(metalSearchQuery)
+          || purity.includes(metalSearchQuery) || notes.includes(metalSearchQuery);
+      })
+    : allEntries;
+
+  const datedEntries   = filteredEntries.filter(m => m.purchaseDate || m.date);
+  const undatedEntries = filteredEntries.filter(m => !m.purchaseDate && !m.date);
+  const byMonthGroup = {};
   datedEntries.forEach(m => {
-    const dk = m.date; // YYYY-MM-DD
-    if (!byDateGroup[dk]) byDateGroup[dk] = [];
-    byDateGroup[dk].push(m);
+    // Use purchaseDate if set, else fall back to m.date (import date)
+    const effectiveDate = m.purchaseDate || m.date;
+    const mk = effectiveDate.slice(0, 7); // YYYY-MM → group by month
+    if (!byMonthGroup[mk]) byMonthGroup[mk] = [];
+    byMonthGroup[mk].push(m);
   });
-  const dateGroupKeys = Object.keys(byDateGroup).sort().reverse(); // newest first
+  const monthKeys = Object.keys(byMonthGroup).sort().reverse(); // newest first
 
   let holdingHtml = '';
-  dateGroupKeys.forEach(dk => {
-    const groupLabel = new Date(dk+'T00:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'});
-    holdingHtml += `<div style="font-size:0.72em;font-weight:800;color:var(--text-light);padding:8px 20px 2px;text-transform:uppercase;letter-spacing:0.04em;background:#FAFAFA;border-bottom:1px solid #F0F0F0;">${groupLabel}</div>`;
-    byDateGroup[dk].forEach((m,idx) => {
+
+  // Show search result count if searching
+  if (metalSearchQuery) {
+    const total = filteredEntries.length;
+    holdingHtml += `<div style="font-size:0.72em;font-weight:700;color:var(--primary);padding:8px 16px 4px;background:#F0F4FF;border-bottom:1px solid #E8EEFF;">🔍 ${total} result${total===1?'':'s'} for "${metalSearchQuery}"</div>`;
+  }
+
+  monthKeys.forEach(mk => {
+    const [yr, mo] = mk.split('-');
+    const groupLabel = new Date(parseInt(yr), parseInt(mo)-1, 1)
+      .toLocaleDateString('en-US', {month:'long', year:'numeric'});
+    const monthGrams = byMonthGroup[mk].reduce((s,m)=>s+Number(m.grams||m.weightGms||0),0);
+    holdingHtml += `<div style="display:flex;justify-content:space-between;align-items:center;font-size:0.72em;font-weight:800;color:var(--text-light);padding:8px 16px 4px;text-transform:uppercase;letter-spacing:0.04em;background:#FAFAFA;border-bottom:1px solid #F0F0F0;">
+      <span>${groupLabel}</span>
+      <span style="font-weight:700;color:var(--text-med);">${monthGrams.toFixed(2)}g · ${byMonthGroup[mk].length} item${byMonthGroup[mk].length===1?'':'s'}</span>
+    </div>`;
+    byMonthGroup[mk].forEach(m => {
       holdingHtml += renderMetalHoldingRow(m, allEntries.indexOf(m));
     });
   });
   if (undatedEntries.length > 0) {
-    holdingHtml += `<div style="font-size:0.72em;font-weight:800;color:var(--text-light);padding:8px 20px 2px;text-transform:uppercase;letter-spacing:0.04em;background:#FAFAFA;border-bottom:1px solid #F0F0F0;">📦 No Date Recorded</div>`;
-    undatedEntries.forEach((m,idx) => {
+    holdingHtml += `<div style="display:flex;justify-content:space-between;align-items:center;font-size:0.72em;font-weight:800;color:var(--text-light);padding:8px 16px 4px;text-transform:uppercase;letter-spacing:0.04em;background:#FAFAFA;border-bottom:1px solid #F0F0F0;">
+      <span>📦 No Date Recorded</span>
+      <span style="font-weight:700;color:var(--text-med);">${undatedEntries.length} item${undatedEntries.length===1?'':'s'}</span>
+    </div>`;
+    undatedEntries.forEach(m => {
       holdingHtml += renderMetalHoldingRow(m, allEntries.indexOf(m));
     });
   }
+
+  if (filteredEntries.length === 0 && metalSearchQuery) {
+    holdingHtml = `<div style="padding:32px 20px;text-align:center;color:var(--text-light);">
+      <div style="font-size:1.8em;margin-bottom:8px;">🔍</div>
+      <div style="font-weight:700;font-size:0.9em;">No entries match "<strong>${metalSearchQuery}</strong>"</div>
+      <div style="font-size:0.78em;margin-top:4px;">Try searching by name, purity, or occasion</div>
+    </div>`;
+  }
+
   hl.innerHTML = holdingHtml;
 }
 
