@@ -3864,7 +3864,7 @@ function renderHomeInsights(expenses, income, investments) {
   if (expGoals.length > 0 && currentPeriod !== 'year') {
     const overBudget = expGoals.map(g => {
       const actual = getBudgetActual(g, viewMonth);
-      const budget = Number(g.amount || 0);
+      const budget = g.currency && g.currency !== currentCurrency.code ? convertAmt(Number(g.amount||0), g.currency) : Number(g.amount || 0);
       return { name: g.name, over: actual - budget, pct: budget > 0 ? actual/budget*100 : 0 };
     }).filter(g => g.over > 0).sort((a,b) => b.pct - a.pct);
     if (overBudget.length > 0) {
@@ -5069,11 +5069,16 @@ function renderCalListView(container) {
   const mk = viewMonth;
   if (!data[mk]) { container.innerHTML = '<div style="text-align:center;padding:30px;color:var(--text-light);font-weight:700;">No data for this month</div>'; return; }
   const toDisp = t => convertAmt(t.amount, t.currency);
-  const exp  = (data[mk].expenses    || []).map(t => ({...t, _type:'expense'}));
-  const inc  = (data[mk].income      || []).map(t => ({...t, _type:'income'}));
-  const inv  = (data[mk].investments || []).map(t => ({...t, _type:'investment'}));
-  const add  = (data[mk].additional  || []).map(t => ({...t, _type:'additional'}));
-  const all  = [...inc, ...exp, ...inv, ...add].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  // Assign _idx so Edit/Delete buttons resolve correctly to the real array position
+  const exp  = (data[mk].expenses    || []).map((t, i) => ({...t, _type:'expense',     _idx:i}));
+  const inc  = (data[mk].income      || []).map((t, i) => ({...t, _type:'income',      _idx:i}));
+  const inv  = (data[mk].investments || []).map((t, i) => ({...t, _type:'investment',  _idx:i}));
+  const add  = (data[mk].additional  || []).map((t, i) => ({...t, _type:'additional',  _idx:i}));
+  // Apply family author filter (same as calendar day view)
+  const authorOk = t => !_authorFilter || (t._addedBy||'').toLowerCase() === _authorFilter.toLowerCase();
+  const all  = [...inc, ...exp, ...inv, ...add]
+    .filter(authorOk)
+    .sort((a,b)=>(b.date||'').localeCompare(a.date||''));
 
   const typeColors = { expense:'#EF4444', income:'#10B981', investment:'#7C3AED', additional:'#F59E0B' };
   const typeLabels = { expense:'Expense', income:'Income', investment:'Invest', additional:'Other' };
@@ -8143,8 +8148,15 @@ function renderBudgetOverview() {
 
   // ── Compute totals depending on mode ──
   let totalExpBudget, totalSavBudget, totalExpActual, totalSavActual;
-  const monthlyExpBudget = expGoals.reduce((s, g) => s + Number(g.amount || 0), 0);
-  const monthlySavBudget = savGoals.reduce((s, g) => s + Number(g.amount || 0), 0);
+  // Convert goal amount from stored currency to current display currency
+  // Goals without stored currency are assumed to be in current display currency
+  const goalToDisp = g => {
+    const raw = Number(g.amount || 0);
+    if (!g.currency || g.currency === currentCurrency.code) return raw;
+    return convertAmt(raw, g.currency);
+  };
+  const monthlyExpBudget = expGoals.reduce((s, g) => s + goalToDisp(g), 0);
+  const monthlySavBudget = savGoals.reduce((s, g) => s + goalToDisp(g), 0);
 
   if (isYear) {
     // Annualized budget = monthly × 12
@@ -8311,7 +8323,7 @@ function renderBudgetGoalsList(type) {
 
   el.innerHTML = goals.map(goal => {
     const actual = getBudgetActual(goal, budgetViewMonth);
-    const budget = Number(goal.amount || 0);
+    const budget = goal.currency && goal.currency !== currentCurrency.code ? convertAmt(Number(goal.amount||0), goal.currency) : Number(goal.amount||0);
     const pct = budget > 0 ? Math.min(actual / budget * 100, 100) : 0;
     const isOver = actual > budget && budget > 0;
     const isSav = type === 'savings';
@@ -8345,7 +8357,7 @@ function renderBudgetGoalsList(type) {
 // Shared function to (re)build the detail view for a given goal
 function _renderBudgetDetail(prefix, goal, type) {
   const actual  = getBudgetActual(goal, budgetViewMonth);
-  const budget  = Number(goal.amount || 0);
+  const budget  = goal.currency && goal.currency !== currentCurrency.code ? convertAmt(Number(goal.amount||0), goal.currency) : Number(goal.amount||0);
   const leftAmt = budget - actual;
   const isOver  = actual > budget && budget > 0;
   const isSav   = type === 'savings';
@@ -8542,6 +8554,7 @@ function saveBudgetChip(type) {
   const goal  = goals.find(g => g.key === det.goalKey);
   if (goal) {
     goal.amount = newAmt;
+    goal.currency = currentCurrency.code; // store currency at time of quick-edit
     save();
     showToast(`✅ Budget updated to ${fmt(newAmt)}`);
     // Re-render everything
@@ -8630,10 +8643,10 @@ function saveEditedBudget() {
   if (editingBudgetKey) {
     const idx = goals.findIndex(g => g.key === editingBudgetKey);
     if (idx >= 0) {
-      goals[idx] = {...goals[idx], name, amount, icon: pickedBudgetEmoji, linkedCats};
+      goals[idx] = {...goals[idx], name, amount, currency: currentCurrency.code, icon: pickedBudgetEmoji, linkedCats};
     }
   } else {
-    goals.push({key, name, icon: pickedBudgetEmoji, amount, linkedCats});
+    goals.push({key, name, icon: pickedBudgetEmoji, amount, currency: currentCurrency.code, linkedCats});
   }
 
   const storageKey = type === 'savings' ? '_savingsGoals' : '_expenseGoals';
@@ -9481,7 +9494,8 @@ function buildMonthlySnapshot(monthKey) {
     const expGoals = getBudgetGoals('expense');
     expGoals.forEach(g => {
       const actual = getBudgetActual(g, mk);
-      budgetPerformance.push({ name: g.key, goal: g.amount, actual, pct: g.amount > 0 ? actual/g.amount*100 : 0 });
+      const _gDisp = g.currency && g.currency !== currentCurrency.code ? convertAmt(Number(g.amount||0), g.currency) : Number(g.amount||0);
+      budgetPerformance.push({ name: g.key, goal: _gDisp, actual, pct: _gDisp > 0 ? actual/_gDisp*100 : 0 });
     });
   } catch(e) {}
 
@@ -9850,11 +9864,10 @@ function saveNWSnapshot() {
   const snap = buildMonthlySnapshot(viewMonth);
   snap._manual = true; // flag as manual — shown with full date+time
   snap._id = 'snap_' + Date.now(); // unique id so multiple per month are allowed
-  const snaps = getNWSnapshots();
-  // For manual: always add new (don't replace — user chose to save at this moment)
-  // But avoid exact same-second duplicates
-  const tooRecent = snaps.find(s => s._id && Math.abs(Date.now() - parseInt(s._id.split('_')[1]||0)) < 5000);
-  if (!tooRecent) snaps.push(snap);
+  // Push directly to data._nwSnapshots — NOT the filtered copy from getNWSnapshots()
+  if (!data._nwSnapshots) data._nwSnapshots = [];
+  const tooRecent = data._nwSnapshots.find(s => s._id && Math.abs(Date.now() - parseInt(s._id.split('_')[1]||0)) < 5000);
+  if (!tooRecent) data._nwSnapshots.push(snap);
   save();
   renderNetWorth();
   renderMonthlyIntelligence();
