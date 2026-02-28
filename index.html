@@ -7582,10 +7582,15 @@ function saveMetalEdit() {
 
   data._metals[idx] = updatedEntry;
   save(); renderMetals(); renderNetWorth();
-  // Animate close like a bottom sheet sliding down
-  const sheet = modal.querySelector('div');
-  if (sheet) { sheet.style.transition = 'transform 0.28s ease'; sheet.style.transform = 'translateY(100%)'; }
-  setTimeout(() => { modal.remove(); showToast('✅ Entry saved successfully!'); }, 260);
+  // Animate close — find the inner content sheet (first direct child div)
+  const innerSheet = modal.firstElementChild;
+  if (innerSheet) {
+    innerSheet.style.transition = 'transform 0.28s cubic-bezier(0.32,0.72,0,1)';
+    innerSheet.style.transform = 'translateY(100%)';
+  }
+  modal.style.background = 'rgba(0,0,0,0)';
+  modal.style.transition = 'background 0.28s';
+  setTimeout(() => { modal.remove(); showToast('✅ Entry saved successfully!'); }, 280);
 }
 
 // ══════════════════════════════════════════════════════
@@ -10496,9 +10501,20 @@ function saveNWAccount() {
   }
 
   save();
-  closeNWSheet();
-  renderNetWorth();
-  showToast('✅ Account saved');
+  renderNetWorth(); // render first so UI updates before sheet closes
+  renderHome();     // home card totals too
+  // Capture edit state before resetting
+  const wasEdit = !!nwSheetEditId;
+  // Animate sheet closed
+  const nwSheet = document.getElementById('nw-sheet');
+  const nwOverlay = document.getElementById('nw-sheet-overlay');
+  if (nwSheet) nwSheet.classList.remove('open');
+  if (nwOverlay) nwOverlay.classList.remove('open');
+  setTimeout(() => {
+    nwSheetType = null;
+    nwSheetEditId = null;
+    showToast(wasEdit ? '✅ Account updated successfully!' : '✅ Account added!');
+  }, 320);
 }
 
 // ══════════════════════════════════════════════════════
