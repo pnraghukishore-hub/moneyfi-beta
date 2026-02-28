@@ -5156,7 +5156,7 @@ function renderCalListView(container) {
   const inv  = (data[mk].investments || []).map((t, i) => ({...t, _type:'investment',  _idx:i}));
   const add  = (data[mk].additional  || []).map((t, i) => ({...t, _type:'additional',  _idx:i}));
   // Apply family author filter (same as calendar day view)
-  const authorOk = t => !_authorFilter || (t._addedBy||'').toLowerCase() === _authorFilter.toLowerCase();
+  const authorOk = t => _authorFilter === 'all' || !_authorFilter || (t._addedBy||'').toLowerCase() === _authorFilter.toLowerCase();
   const all  = [...inc, ...exp, ...inv, ...add]
     .filter(authorOk)
     .sort((a,b)=>(b.date||'').localeCompare(a.date||''));
@@ -6812,14 +6812,14 @@ function openMetalPriceSheet() {
   
   renderPurityPrices(currentMetal);
 
-  // Show with scale+fade animation — no body scroll lock needed
+  // Show with scale+fade animation — double rAF ensures transition plays after display change
   backdrop.style.display = '';
   sheet.style.display = '';
-  requestAnimationFrame(() => {
+  requestAnimationFrame(() => requestAnimationFrame(() => {
     backdrop.style.opacity = '1';
     sheet.style.opacity = '1';
     sheet.style.transform = 'translate(-50%,-50%) scale(1)';
-  });
+  }));
 }
 
 function closeMetalPriceSheet() {
@@ -7174,7 +7174,14 @@ function renderMetalHoldingRow(m, idx) {
   const purityTag = purity ? `<span style="background:#F5F5F5;border-radius:5px;padding:1px 6px;font-size:0.75em;font-weight:700;color:#7C3AED;">${purity}</span>` : '';
   const priceTag = `<span style="color:var(--text-light);font-size:0.75em;">$${price.toFixed(2)}/g <span style="color:#10B981;font-size:0.85em;font-weight:800;">live</span></span>`;
   const sourceTag = m._source==='networth' ? `<span style="font-size:0.7em;color:var(--text-light);"> · 📊 NW</span>` : '';
-  const paidCostUSD = (m.price && m.price > 0) ? m.price * grams : 0;
+  // Convert purchase price from its stored currency → USD for consistent display
+  let paidCostUSD = 0;
+  if (m.price && m.price > 0) {
+    const pStoredCurr = m.priceCurrency || currentCurrency.code;
+    const pDispVal = convertAmt(m.price, pStoredCurr); // → currentCurrency
+    const fxToUSD = convertAmt(1, 'USD'); // 1 USD in current currency
+    paidCostUSD = fxToUSD > 0 ? (pDispVal / fxToUSD) * grams : m.price * grams;
+  }
   const paidTag = paidCostUSD > 0 ? `<div style="font-size:0.7em;color:#7C3AED;font-weight:700;margin-top:1px;">paid ${fmt(convertAmt(paidCostUSD,'USD'))}</div>` : '';
   const qaTag = ''; // Propagation is seamless — no need to show source chip
   const delBtn = m._source==='networth'
