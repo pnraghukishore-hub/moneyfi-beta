@@ -7120,13 +7120,16 @@ function renderMetalROI() {
     const g = Number(m.grams || m.weightGms || 0);
     const livePrice = getPriceForMetal(currentMetal, m.purity || '');
     totalValueUSD += g * livePrice;
-    if (Number(m.price || 0) > 0) {
-      // Convert m.price from its stored currency → USD for consistent comparison
-      const storedCurr = m.priceCurrency || currentCurrency.code;
-      const priceInDisp = convertAmt(m.price, storedCurr); // → currentCurrency
-      const fxMult = convertAmt(1, 'USD'); // 1 USD in display currency
-      const priceInUSD = fxMult > 0 ? priceInDisp / fxMult : priceInDisp;
-      totalCostUSD += g * priceInUSD;
+    if (Number(m.costBasisUSD || 0) > 0) {
+      // New canonical field: total cost already in USD
+      totalCostUSD += Number(m.costBasisUSD);
+      gramsWithCost += g;
+    } else if (Number(m.price || 0) > 0) {
+      // Legacy: price-per-gram in m.priceCurrency → convert to USD total
+      const storedCurr = m.priceCurrency || 'USD';
+      const fxRate = convertAmt(1, 'USD'); // 1 USD in display currency
+      const priceUSD = fxRate > 0 ? convertAmt(m.price, storedCurr) / fxRate : m.price;
+      totalCostUSD += g * priceUSD;
       gramsWithCost += g;
     }
   });
@@ -7263,7 +7266,13 @@ function renderMetalHoldingRow(m, idx) {
 function addMetalEntry() {
   const name=document.getElementById('metal-name').value.trim(), grams=parseFloat(document.getElementById('metal-grams').value), price=parseFloat(document.getElementById('metal-price').value)||0, date=document.getElementById('metal-date').value||localDateStr(), form=document.getElementById('metal-form').value, notes=document.getElementById('metal-notes').value.trim(), purity=document.getElementById('metal-purity').value.trim(), occasion=document.getElementById('metal-occasion').value.trim();
   if(!name){showToast('Enter a source/name ❌');return;} if(!grams||grams<=0){showToast('Enter a valid weight ❌');return;}
-  getMetals().push({metalType:currentMetal,name,grams,price:price||METAL_CONFIG[currentMetal].pricePerGram,priceCurrency:currentCurrency.code,date,form,notes,purity,occasion});
+  // Compute costBasisUSD from entered price (price is per-gram in display currency)
+  let costBasisUSD = 0;
+  if (price > 0) {
+    const fxRate = convertAmt(1, 'USD'); // 1 USD in display currency
+    costBasisUSD = fxRate > 0 ? (price * grams) / fxRate : price * grams;
+  }
+  getMetals().push({metalType:currentMetal,name,grams,costBasisUSD,date,form,notes,purity,occasion});
   save(); renderMetals();
   ['name','grams','price','notes','purity','occasion'].forEach(id=>{try{document.getElementById('metal-'+id).value='';}catch(e){}});
   addPanelOpen=false; document.getElementById('metal-add-panel-body').classList.remove('open'); document.getElementById('add-panel-toggle').textContent='+';
@@ -7312,65 +7321,127 @@ function deleteImportedMetal(idx) {
 function openEditMetalSheet(idx) {
   const m = (data._metals || [])[idx];
   if (!m) return;
-  // Issue 5: Use inline modal instead of browser prompts
-  let modal = document.getElementById('metal-edit-modal');
-  if (!modal) {
-    modal = document.createElement('div');
-    modal.id = 'metal-edit-modal';
-    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:flex-end;justify-content:center;';
-    modal.innerHTML = `<div style="background:white;border-radius:20px 20px 0 0;padding:24px 20px 32px;width:100%;max-width:480px;box-shadow:0 -8px 32px rgba(0,0,0,0.15);">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
-        <div style="font-weight:900;font-size:1.1em;color:#222;">✏️ Edit Metal Entry</div>
-        <button onclick="document.getElementById('metal-edit-modal').remove()" style="background:#F5F5F5;border:none;border-radius:50%;width:32px;height:32px;font-size:1.1em;cursor:pointer;">✕</button>
-      </div>
-      <div style="display:grid;gap:10px;">
-        <input id="me-name" placeholder="Item name" style="width:100%;padding:10px 12px;border:1.5px solid #E8E8E8;border-radius:10px;font-family:Nunito,sans-serif;font-weight:700;font-size:0.9em;box-sizing:border-box;">
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-          <input id="me-grams" type="number" placeholder="Weight (g)" step="0.001" min="0" style="padding:10px 12px;border:1.5px solid #E8E8E8;border-radius:10px;font-family:Nunito,sans-serif;font-weight:700;font-size:0.9em;">
-          <input id="me-purity" placeholder="Purity e.g. 22K" style="padding:10px 12px;border:1.5px solid #E8E8E8;border-radius:10px;font-family:Nunito,sans-serif;font-weight:700;font-size:0.9em;">
-        </div>
-        <input id="me-occasion" placeholder="Occasion (e.g. Wedding)" style="width:100%;padding:10px 12px;border:1.5px solid #E8E8E8;border-radius:10px;font-family:Nunito,sans-serif;font-weight:700;font-size:0.9em;box-sizing:border-box;">
+
+  // Always remove and recreate so currency symbols are always fresh
+  const old = document.getElementById('metal-edit-modal');
+  if (old) old.remove();
+
+  const S = sym(); // current display currency symbol e.g. ₹
+  const C = currentCurrency.code; // e.g. INR
+
+  const modal = document.createElement('div');
+  modal.id = 'metal-edit-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:flex-end;justify-content:center;';
+  modal.innerHTML = `<div style="background:white;border-radius:22px 22px 0 0;padding:22px 20px 36px;width:100%;max-width:480px;box-shadow:0 -8px 32px rgba(0,0,0,0.15);max-height:90vh;overflow-y:auto;">
+    <!-- Handle + header -->
+    <div style="display:flex;justify-content:center;margin-bottom:10px;">
+      <div style="width:38px;height:4px;background:#E0E0E0;border-radius:4px;"></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
+      <div style="font-weight:900;font-size:1.05em;color:#222;">✏️ Edit Metal Entry</div>
+      <button onclick="document.getElementById('metal-edit-modal').remove()" style="background:#F5F5F5;border:none;border-radius:50%;width:32px;height:32px;font-size:1.1em;cursor:pointer;">✕</button>
+    </div>
+    <div style="display:grid;gap:10px;">
+      <!-- Name -->
+      <input id="me-name" placeholder="Item name (e.g. Earrings)" style="width:100%;padding:10px 12px;border:1.5px solid #E8E8E8;border-radius:10px;font-family:Nunito,sans-serif;font-weight:700;font-size:0.9em;box-sizing:border-box;">
+      <!-- Weight + Purity -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
         <div style="position:relative;">
-          <input id="me-price" type="number" placeholder="Purchase price / gram (optional)" step="0.01" min="0"
-            style="width:100%;padding:10px 12px 10px 36px;border:1.5px solid #E8E8E8;border-radius:10px;font-family:Nunito,sans-serif;font-weight:700;font-size:0.9em;box-sizing:border-box;">
-          <span id="me-price-sym" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);font-weight:800;font-size:0.85em;color:#9AA0B2;">$</span>
-          <div id="me-price-tip" style="font-size:0.62em;color:#9AA0B2;font-weight:700;margin-top:3px;padding-left:2px;">💡 Cost basis per gram — used for ROI calculation</div>
+          <input id="me-grams" type="number" placeholder="Weight" step="0.001" min="0" style="width:100%;padding:10px 38px 10px 12px;border:1.5px solid #E8E8E8;border-radius:10px;font-family:Nunito,sans-serif;font-weight:700;font-size:0.9em;box-sizing:border-box;">
+          <span style="position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:0.75em;font-weight:700;color:#9AA0B2;">g</span>
         </div>
-        <select id="me-type" style="width:100%;padding:10px 12px;border:1.5px solid #E8E8E8;border-radius:10px;font-family:Nunito,sans-serif;font-weight:700;font-size:0.9em;background:white;box-sizing:border-box;">
-          <option value="gold">🥇 Gold</option>
-          <option value="silver">🥈 Silver</option>
-          <option value="platinum">⬜ Platinum</option>
-        </select>
-        <button onclick="saveMetalEdit()" style="background:#10B981;color:white;border:none;border-radius:12px;padding:14px;font-weight:900;font-size:1em;cursor:pointer;font-family:Nunito,sans-serif;">✅ Save Changes</button>
+        <input id="me-purity" placeholder="Purity e.g. 22K" style="padding:10px 12px;border:1.5px solid #E8E8E8;border-radius:10px;font-family:Nunito,sans-serif;font-weight:700;font-size:0.9em;width:100%;box-sizing:border-box;">
       </div>
-    </div>`;
-    document.body.appendChild(modal);
-  }
+      <!-- Occasion -->
+      <input id="me-occasion" placeholder="Occasion (e.g. Anniversary)" style="width:100%;padding:10px 12px;border:1.5px solid #E8E8E8;border-radius:10px;font-family:Nunito,sans-serif;font-weight:700;font-size:0.9em;box-sizing:border-box;">
+      <!-- Metal type -->
+      <select id="me-type" style="width:100%;padding:10px 12px;border:1.5px solid #E8E8E8;border-radius:10px;font-family:Nunito,sans-serif;font-weight:700;font-size:0.9em;background:white;box-sizing:border-box;">
+        <option value="gold">🥇 Gold</option>
+        <option value="silver">🥈 Silver</option>
+        <option value="platinum">⬜ Platinum</option>
+      </select>
+
+      <!-- ── Cost Basis block ── -->
+      <div style="background:#F8F8F8;border-radius:14px;padding:14px;">
+        <div style="font-size:0.68em;font-weight:800;color:#9AA0B2;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:10px;">💰 Purchase Cost (for ROI)</div>
+
+        <!-- Mode toggle: Total price vs Per-gram -->
+        <div style="background:#EBEBEB;border-radius:10px;padding:3px;display:flex;gap:2px;margin-bottom:12px;">
+          <button id="me-mode-total" onclick="meCostMode('total')"
+            style="flex:1;border:none;border-radius:8px;padding:7px;font-family:Nunito,sans-serif;font-weight:800;font-size:0.78em;cursor:pointer;background:white;color:#222;box-shadow:0 1px 3px rgba(0,0,0,0.10);">
+            Total price paid
+          </button>
+          <button id="me-mode-pergram" onclick="meCostMode('pergram')"
+            style="flex:1;border:none;border-radius:8px;padding:7px;font-family:Nunito,sans-serif;font-weight:800;font-size:0.78em;cursor:pointer;background:transparent;color:#9AA0B2;">
+            Avg price / gram
+          </button>
+        </div>
+
+        <!-- Total price input -->
+        <div id="me-cost-total-row" style="position:relative;">
+          <span style="position:absolute;left:11px;top:50%;transform:translateY(-50%);font-weight:800;font-size:0.88em;color:#9AA0B2;pointer-events:none;">${S}</span>
+          <input id="me-cost-total" type="number" placeholder="e.g. 24500" step="0.01" min="0"
+            style="width:100%;padding:10px 12px 10px 28px;border:1.5px solid #E0E0E0;border-radius:10px;font-size:0.95em;font-weight:800;font-family:Nunito,sans-serif;outline:none;box-sizing:border-box;background:white;"
+            onfocus="this.style.borderColor='var(--primary)'" onblur="this.style.borderColor='#E0E0E0'">
+        </div>
+
+        <!-- Per-gram input (hidden by default) -->
+        <div id="me-cost-pergram-row" style="display:none;position:relative;">
+          <span style="position:absolute;left:11px;top:50%;transform:translateY(-50%);font-weight:800;font-size:0.88em;color:#9AA0B2;pointer-events:none;">${S}</span>
+          <input id="me-cost-pergram" type="number" placeholder="e.g. 6282" step="0.01" min="0"
+            style="width:100%;padding:10px 12px 10px 28px;border:1.5px solid #E0E0E0;border-radius:10px;font-size:0.95em;font-weight:800;font-family:Nunito,sans-serif;outline:none;box-sizing:border-box;background:white;"
+            onfocus="this.style.borderColor='var(--primary)'" onblur="this.style.borderColor='#E0E0E0'">
+        </div>
+
+        <div style="font-size:0.62em;color:#9AA0B2;font-weight:700;margin-top:6px;">
+          Entered in <strong>${C}</strong> — stored internally in USD for consistent ROI tracking
+        </div>
+      </div>
+
+      <button onclick="saveMetalEdit()" style="background:#10B981;color:white;border:none;border-radius:12px;padding:14px;font-weight:900;font-size:1em;cursor:pointer;font-family:Nunito,sans-serif;">✅ Save Changes</button>
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+
   // Pre-fill fields
-  document.getElementById('me-name').value    = m.itemName || m.name || '';
-  document.getElementById('me-grams').value   = m.grams || m.weightGms || '';
-  document.getElementById('me-purity').value  = m.purity || '';
+  document.getElementById('me-name').value     = m.itemName || m.name || '';
+  document.getElementById('me-grams').value    = m.grams || m.weightGms || '';
+  document.getElementById('me-purity').value   = m.purity || '';
   document.getElementById('me-occasion').value = m.occasion || '';
-  // Convert stored price from its original currency to current display currency
-  let meDisplayPrice = '';
-  if (m.price > 0) {
-    const storedCurr = m.priceCurrency || currentCurrency.code;
-    const priceInDisp = convertAmt(m.price, storedCurr); // storedCurr → currentCurrency
-    meDisplayPrice = priceInDisp.toFixed(2);
+  document.getElementById('me-type').value     = m.metalType || 'gold';
+
+  // Pre-fill cost basis — costBasisUSD is the canonical field (total cost in USD)
+  // Legacy: m.price was price-per-gram in m.priceCurrency
+  const grams = parseFloat(m.grams || m.weightGms || 0);
+  let totalInDisp = '';
+  if (m.costBasisUSD > 0) {
+    // New canonical field — convert USD total → display currency
+    totalInDisp = convertAmt(m.costBasisUSD, 'USD').toFixed(2);
+  } else if (m.price > 0 && grams > 0) {
+    // Legacy per-gram field — reconstruct total in display currency
+    const storedCurr = m.priceCurrency || 'USD';
+    const perGramDisp = convertAmt(m.price, storedCurr);
+    totalInDisp = (perGramDisp * grams).toFixed(2);
   }
-  document.getElementById('me-price').value   = meDisplayPrice;
-  document.getElementById('me-type').value    = m.metalType || 'gold';
-  // Update currency symbol AND placeholder to reflect current currency
-  const symEl = document.getElementById('me-price-sym');
-  if (symEl) symEl.textContent = sym();
-  const priceInput = document.getElementById('me-price');
-  if (priceInput) {
-    priceInput.placeholder = `Purchase price / gram in ${currentCurrency.code} (optional)`;
-  }
-  const priceTip = document.getElementById('me-price-tip');
-  if (priceTip) priceTip.textContent = `💡 Cost basis in ${currentCurrency.code}/gram — used for ROI. Enter the price you paid per gram.`;
+  if (totalInDisp) document.getElementById('me-cost-total').value = totalInDisp;
+
   modal.dataset.idx = idx;
   modal.style.display = 'flex';
+}
+
+function meCostMode(mode) {
+  const isTotal = mode === 'total';
+  document.getElementById('me-cost-total-row').style.display    = isTotal ? '' : 'none';
+  document.getElementById('me-cost-pergram-row').style.display  = isTotal ? 'none' : '';
+  // Button styles
+  const btnT = document.getElementById('me-mode-total');
+  const btnP = document.getElementById('me-mode-pergram');
+  btnT.style.background   = isTotal ? 'white' : 'transparent';
+  btnT.style.color        = isTotal ? '#222' : '#9AA0B2';
+  btnT.style.boxShadow    = isTotal ? '0 1px 3px rgba(0,0,0,0.10)' : 'none';
+  btnP.style.background   = isTotal ? 'transparent' : 'white';
+  btnP.style.color        = isTotal ? '#9AA0B2' : '#222';
+  btnP.style.boxShadow    = isTotal ? 'none' : '0 1px 3px rgba(0,0,0,0.10)';
 }
 
 function saveMetalEdit() {
@@ -7379,24 +7450,49 @@ function saveMetalEdit() {
   const idx = parseInt(modal.dataset.idx);
   const m = (data._metals || [])[idx];
   if (!m) return;
-  const name   = document.getElementById('me-name').value.trim();
-  const grams  = parseFloat(document.getElementById('me-grams').value);
-  const purity = document.getElementById('me-purity').value.trim();
+
+  const name     = document.getElementById('me-name').value.trim();
+  const grams    = parseFloat(document.getElementById('me-grams').value);
+  const purity   = document.getElementById('me-purity').value.trim();
   const occasion = document.getElementById('me-occasion').value.trim();
-  const priceRaw = document.getElementById('me-price').value;
-  const price  = priceRaw !== '' ? parseFloat(priceRaw) : undefined;
-  const type   = document.getElementById('me-type').value;
-  if (!name) { showToast('Enter item name ❌'); return; }
+  const type     = document.getElementById('me-type').value;
+
+  if (!name)             { showToast('Enter item name ❌'); return; }
   if (!grams || grams <= 0) { showToast('Enter valid weight ❌'); return; }
-  const updatedEntry = { ...m, metalType:type, name, itemName:name, grams, weightGms:grams, purity, occasion };
-  if (price !== undefined && !isNaN(price) && price > 0) {
-    updatedEntry.price = price;
-    updatedEntry.priceCurrency = currentCurrency.code; // record which currency this price is in
+
+  // Resolve cost basis → always store as total USD internally (costBasisUSD)
+  const totalRow   = document.getElementById('me-cost-total-row');
+  const useTotal   = totalRow && totalRow.style.display !== 'none';
+  let costBasisUSD = m.costBasisUSD || 0; // keep existing if not changed
+
+  if (useTotal) {
+    const totalDisp = parseFloat(document.getElementById('me-cost-total').value);
+    if (!isNaN(totalDisp) && totalDisp > 0) {
+      // Convert display currency total → USD
+      const fxRate = convertAmt(1, 'USD'); // 1 USD in display currency
+      costBasisUSD = fxRate > 0 ? totalDisp / fxRate : totalDisp;
+    } else if (totalDisp === 0) {
+      costBasisUSD = 0;
+    }
+  } else {
+    const perGramDisp = parseFloat(document.getElementById('me-cost-pergram').value);
+    if (!isNaN(perGramDisp) && perGramDisp > 0) {
+      const totalDisp = perGramDisp * grams;
+      const fxRate = convertAmt(1, 'USD');
+      costBasisUSD = fxRate > 0 ? totalDisp / fxRate : totalDisp;
+    } else if (perGramDisp === 0) {
+      costBasisUSD = 0;
+    }
   }
-  else if (price === 0) delete updatedEntry.price; // cleared explicitly → remove cost basis
+
+  const updatedEntry = { ...m, metalType:type, name, itemName:name, grams, weightGms:grams, purity, occasion, costBasisUSD };
+  // Clear legacy per-gram price fields to avoid double-counting in ROI
+  delete updatedEntry.price;
+  delete updatedEntry.priceCurrency;
+
   data._metals[idx] = updatedEntry;
   save(); renderMetals(); renderNetWorth();
-  modal.remove(); // Issue 5: close cleanly
+  modal.remove();
   showToast('✅ Metal entry updated');
 }
 
