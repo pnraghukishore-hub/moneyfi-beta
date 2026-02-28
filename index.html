@@ -4646,6 +4646,12 @@ function selectCurrency(code) {
     updateInvCurrBtn();
     calcInvTotal();
   } else {
+    // Stamp goals that lack stored currency with CURRENT (old) code before switching
+    const _oldCurrCode = currentCurrency.code;
+    ['_expenseGoals','_savingsGoals'].forEach(k => {
+      (data[k] || []).forEach(g => { if (!g.currency) g.currency = _oldCurrCode; });
+    });
+    if (data._expenseGoals || data._savingsGoals) save();
     saveCurrency(c);
     renderHome();
     try { renderTransactions(); } catch(e) {}
@@ -5569,7 +5575,7 @@ function renderRecurringRules() {
         </div>
       </div>
       <div style="text-align:right;flex-shrink:0;">
-        <div style="font-weight:900;font-size:0.92em;color:${r.type==='income'?'var(--income)':'var(--expenses)'};">${fmt(r.amount)}</div>
+        <div style="font-weight:900;font-size:0.92em;color:${r.type==='income'?'var(--income)':'var(--expenses)'};">${fmtConverted(r.amount, r.currency||currentCurrency.code)}</div>
         <div style="font-size:0.68em;font-weight:700;margin-top:2px;">
           <span style="cursor:pointer;color:${r.active?'#10B981':'#EF4444'};" onclick="toggleRecurringRule(${i})">
             ${r.active ? '● Active' : '○ Paused'}
@@ -10304,7 +10310,7 @@ function buildFinalPreview() {
   const preview = records.slice(0, 20);
   const tbl = document.getElementById('itx-final-table');
   tbl.innerHTML = `<thead><tr><th>Date</th><th>Category</th><th>Amount</th><th>Description</th></tr></thead><tbody>${
-    preview.map(r=>`<tr><td>${r.date}</td><td>${r.category}</td><td>${fmt(r.amount)}</td><td>${r.description||''}</td></tr>`).join('')
+    preview.map(r=>`<tr><td>${r.date}</td><td>${r.category}</td><td>${fmtConverted(r.amount, r.currency||currentCurrency.code)}</td><td>${r.description||''}</td></tr>`).join('')
   }${records.length>20?`<tr><td colspan="4" style="text-align:center;color:var(--text-light);font-style:italic;">... and ${records.length-20} more</td></tr>`:''}</tbody>`;
 }
 
