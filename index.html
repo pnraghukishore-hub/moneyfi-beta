@@ -1628,23 +1628,7 @@
         <span style="font-size:1.3em;font-weight:900;color:var(--text-dark);" id="metal-live-price">—</span>
         <button onclick="showMetalPriceEdit()" style="background:#F0F4FF;border:none;border-radius:7px;padding:3px 8px;font-size:0.72em;font-weight:800;color:var(--primary);cursor:pointer;">⚙️ Price</button>
       </div>
-      <div id="metal-price-override-panel" style="display:none;margin-top:8px;background:white;border:1.5px solid #DDD;border-radius:10px;padding:10px 12px;text-align:left;">
-          <div style="display:flex;align-items:center;justify-content:flex-end;gap:6px;margin-bottom:8px;">
-            <span style="font-size:0.72em;font-weight:700;color:var(--text-med);">Price per:</span>
-            <select id="metal-price-unit-toggle" onchange="toggleMetalPriceUnit()"
-              style="font-family:Nunito,sans-serif;font-weight:800;font-size:0.78em;border:1.5px solid #DDD;border-radius:7px;padding:3px 8px;background:#F8F8F8;cursor:pointer;">
-              <option value="g">gram (g)</option>
-              <option value="oz">troy oz</option>
-            </select>
-          </div>
-        <div style="font-size:0.78em;font-weight:800;color:var(--text-dark);margin-bottom:6px;" id="metal-price-override-label">Set base $/gram:</div>
-        <div style="display:flex;gap:8px;margin-bottom:8px;">
-          <input type="number" id="metal-price-override-input" step="0.01" placeholder="e.g. 96.50" style="flex:1;border:1.5px solid #DDD;border-radius:8px;padding:6px 10px;font-size:0.9em;font-weight:700;">
-          <button onclick="applyMetalPriceOverride()" style="background:#10B981;color:white;border:none;border-radius:8px;padding:6px 12px;font-weight:800;font-size:0.82em;cursor:pointer;">✓</button>
-          <button onclick="resetMetalPriceOverride(currentMetal)" style="background:#FFF0F0;color:#EF4444;border:none;border-radius:8px;padding:6px 10px;font-weight:800;font-size:0.82em;cursor:pointer;">Reset All</button>
-        </div>
-        <div id="metal-purity-prices"></div>
-      </div>
+      <div id="metal-price-override-panel" style="display:none;"><!-- moved to bottom sheet --></div>
     </div>
   </div>
   <div class="metal-stat-row">
@@ -2959,7 +2943,79 @@
 </div>
 
 <!-- RECURRING DELETE CHOICE MODAL -->
-<div class="modal-overlay" id="rec-delete-modal" style="display:none;" onclick="if(event.target===this)closeRecDeleteModal()">
+<div class="modal-overlay" 
+<!-- ── Metal Price Bottom Sheet ─────────────────────────────── -->
+<div id="metal-price-sheet-backdrop" onclick="closeMetalPriceSheet()"
+  style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:1100;transition:opacity 0.25s;opacity:0;"></div>
+
+<div id="metal-price-sheet" style="
+  display:none;
+  position:fixed;
+  left:0;right:0;bottom:0;
+  background:white;
+  border-radius:22px 22px 0 0;
+  z-index:1101;
+  padding:0 0 env(safe-area-inset-bottom,16px);
+  box-shadow:0 -4px 40px rgba(0,0,0,0.18);
+  transform:translateY(100%);
+  transition:transform 0.32s cubic-bezier(0.32,0,0.15,1);
+  max-height:88vh;
+  overflow-y:auto;
+  -webkit-overflow-scrolling:touch;
+">
+  <!-- Drag handle -->
+  <div style="display:flex;justify-content:center;padding:12px 0 4px;">
+    <div style="width:40px;height:4px;background:#E0E0E0;border-radius:99px;"></div>
+  </div>
+  <!-- Header -->
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 18px 10px;">
+    <div>
+      <div style="font-weight:900;font-size:1em;color:var(--text-dark);" id="metal-sheet-title">⚙️ Set Gold Price</div>
+      <div style="font-size:0.72em;color:var(--text-light);font-weight:600;margin-top:2px;" id="metal-sheet-subtitle">Prices are stored in USD and converted to your display currency</div>
+    </div>
+    <button onclick="closeMetalPriceSheet()" style="background:#F2F2F2;border:none;border-radius:50%;width:32px;height:32px;font-size:1em;cursor:pointer;color:var(--text-med);font-weight:900;">✕</button>
+  </div>
+  <!-- Unit toggle -->
+  <div style="display:flex;align-items:center;gap:10px;padding:0 18px 10px;">
+    <span style="font-size:0.8em;font-weight:700;color:var(--text-med);">Price per:</span>
+    <select id="metal-price-unit-toggle" onchange="toggleMetalPriceUnit()"
+      style="font-family:Nunito,sans-serif;font-weight:800;font-size:0.82em;border:1.5px solid #DDD;border-radius:9px;padding:5px 12px;background:#F8F8F8;cursor:pointer;flex:1;">
+      <option value="g">gram (g)</option>
+      <option value="oz">troy oz</option>
+    </select>
+  </div>
+  <!-- Base price input -->
+  <div style="padding:0 18px 4px;">
+    <div style="font-size:0.8em;font-weight:800;color:var(--text-dark);margin-bottom:8px;" id="metal-price-override-label">Set base price</div>
+    <div style="display:flex;gap:8px;margin-bottom:4px;">
+      <input type="number" id="metal-price-override-input" step="0.01" placeholder="e.g. 8500"
+        style="flex:1;border:2px solid #E8E8E8;border-radius:12px;padding:10px 14px;font-size:1em;font-weight:700;font-family:Nunito,sans-serif;outline:none;"
+        onfocus="this.style.borderColor='var(--primary)'" onblur="this.style.borderColor='#E8E8E8'">
+      <button onclick="applyMetalPriceOverride()"
+        style="background:#10B981;color:white;border:none;border-radius:12px;padding:10px 18px;font-weight:900;font-size:0.95em;cursor:pointer;white-space:nowrap;">✓ Save</button>
+    </div>
+    <button onclick="resetMetalPriceOverride(currentMetal)"
+      style="background:#FFF0F0;color:#EF4444;border:none;border-radius:9px;padding:7px 14px;font-weight:800;font-size:0.78em;cursor:pointer;margin-top:2px;width:100%;">↺ Reset to default</button>
+  </div>
+  <!-- Per-purity breakdown -->
+  <div style="margin:10px 18px 0;" id="metal-purity-prices"></div>
+  <!-- Purity override inline -->
+  <div style="margin:0 18px 8px;" id="purity-override-inline" style="display:none;">
+    <div style="background:#F8F8FF;border-radius:10px;padding:10px 12px;margin-top:8px;">
+      <div style="font-size:0.78em;font-weight:800;color:var(--text-dark);margin-bottom:6px;" id="poi-label">Set price for —</div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <input type="number" id="poi-input" step="0.01" placeholder="price/gram"
+          style="flex:1;border:1.5px solid #DDD;border-radius:9px;padding:7px 10px;font-size:0.9em;font-weight:700;font-family:Nunito,sans-serif;">
+        <button onclick="applyPurityOverride()"
+          style="background:#10B981;color:white;border:none;border-radius:9px;padding:7px 12px;font-weight:800;font-size:0.82em;cursor:pointer;">✓ Save</button>
+        <button onclick="document.getElementById('purity-override-inline').style.display='none'"
+          style="background:#EEE;border:none;border-radius:9px;padding:7px 10px;font-weight:800;font-size:0.82em;cursor:pointer;color:var(--text-med);">✕</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+id="rec-delete-modal" style="display:none;" onclick="if(event.target===this)closeRecDeleteModal()">
   <div class="modal" style="max-width:340px;">
     <div class="modal-header">
       <div class="modal-title">🗑 Delete Rule</div>
@@ -3243,6 +3299,20 @@ function convertAmt(amount, entryCurrencyCode) {
 }
 
 // Wrapper: format an amount respecting its stored currency
+
+// ── Metal price currency helpers ──────────────────────────────────────────────
+// Metal prices are ALWAYS stored internally as USD/gram
+// Use these helpers for all metal price display and save operations
+function metalPriceToDisplay(usdPerGram) {
+  // Convert USD/gram → current display currency/gram
+  const rate = (data._fxOverrides || {})[currentCurrency.code] ?? FX_USD_BASE[currentCurrency.code] ?? 1;
+  return Number(usdPerGram || 0) * rate;
+}
+function metalPriceToUSD(displayPricePerGram) {
+  // Convert display currency/gram → USD/gram for storage
+  const rate = (data._fxOverrides || {})[currentCurrency.code] ?? FX_USD_BASE[currentCurrency.code] ?? 1;
+  return Number(displayPricePerGram || 0) / (rate || 1);
+}
 function fmtConverted(amount, entryCurrencyCode) {
   return sym() + Math.abs(convertAmt(amount, entryCurrencyCode)).toLocaleString(undefined,{minimumFractionDigits:0,maximumFractionDigits:0});
 }
@@ -3495,10 +3565,14 @@ function resetMetalPriceOverride(metalType, purity) {
     });
   }
   save(); renderMetals(); renderNetWorth();
-  // Close price panel after reset too
-  const _rp = document.getElementById('metal-price-override-panel');
-  if (_rp) _rp.style.display = 'none';
-  showToast('Price reset to default');
+  // Refresh the input in the sheet to show new default value
+  const base = getMetalBasePrice(metalType);
+  const baseDisp = metalPriceToDisplay(base);
+  const unit = document.getElementById('metal-price-unit-toggle')?.value || 'g';
+  const inp = document.getElementById('metal-price-override-input');
+  if (inp) inp.value = (unit === 'oz' ? baseDisp * 31.1035 : baseDisp).toFixed(2);
+  renderPurityPrices(metalType);
+  showToast('\u21BA Price reset to default');
 }
 
 function getMetalBasePrice(metalType) {
@@ -6711,26 +6785,61 @@ function processImportRows(rows,selectedMonth,type){
 function getMetals() { if(!data._metals) data._metals=[]; return data._metals; }
 function toggleAddPanel() { addPanelOpen=!addPanelOpen; document.getElementById('metal-add-panel-body').classList.toggle('open',addPanelOpen); const t=document.getElementById('add-panel-toggle'); t.textContent=addPanelOpen?'−':'+'; t.classList.toggle('open',addPanelOpen); }
 function showMetalPriceEdit() {
-  const panel = document.getElementById('metal-price-override-panel');
-  if (!panel) return;
-  const isVisible = panel.style.display !== 'none';
-  panel.style.display = isVisible ? 'none' : '';
-  if (!isVisible) {
-    const base = getMetalBasePrice(currentMetal);
-    const unitToggle = document.getElementById('metal-price-unit-toggle');
-    const unit = unitToggle ? unitToggle.value : 'g';
-    const baseInUnit = unit === 'oz' ? (base * 31.1035) : base;
-    document.getElementById('metal-price-override-input').value = baseInUnit.toFixed(2);
-    document.getElementById('metal-price-override-label').textContent =
-      `Set base price (${currentMetal === 'gold' ? '24K pure' : currentMetal === 'silver' ? '999 Fine' : 'Pt999'}) ${sym()}/${unit} for ${METAL_CONFIG[currentMetal].label}:`;
-    renderPurityPrices(currentMetal);
-  }
+  openMetalPriceSheet();
+}
+
+function openMetalPriceSheet() {
+  const sheet = document.getElementById('metal-price-sheet');
+  const backdrop = document.getElementById('metal-price-sheet-backdrop');
+  if (!sheet || !backdrop) return;
+
+  // Populate values
+  const mc = METAL_CONFIG[currentMetal] || {};
+  const base = getMetalBasePrice(currentMetal); // USD/gram
+  const baseDisp = metalPriceToDisplay(base);    // display currency/gram
+  const unit = document.getElementById('metal-price-unit-toggle')?.value || 'g';
+  const baseInUnit = unit === 'oz' ? (baseDisp * 31.1035) : baseDisp;
+  
+  document.getElementById('metal-sheet-title').textContent = `⚙️ Set ${mc.label || currentMetal} Price`;
+  document.getElementById('metal-price-override-label').textContent =
+    `Base price (${currentMetal === 'gold' ? '24K pure' : currentMetal === 'silver' ? '999 Fine' : 'Pt999'}) — ${sym()}/${unit}:`;
+  document.getElementById('metal-price-override-input').value = baseInUnit.toFixed(2);
+  
+  // Hide purity sub-panel
+  const poi = document.getElementById('purity-override-inline');
+  if (poi) poi.style.display = 'none';
+  
+  renderPurityPrices(currentMetal);
+
+  // Show with animation
+  backdrop.style.display = '';
+  sheet.style.display = '';
+  requestAnimationFrame(() => {
+    backdrop.style.opacity = '1';
+    sheet.style.transform = 'translateY(0)';
+  });
+  // Lock body scroll
+  document.body.style.overflow = 'hidden';
+}
+
+function closeMetalPriceSheet() {
+  const sheet = document.getElementById('metal-price-sheet');
+  const backdrop = document.getElementById('metal-price-sheet-backdrop');
+  if (!sheet || !backdrop) return;
+  sheet.style.transform = 'translateY(100%)';
+  backdrop.style.opacity = '0';
+  setTimeout(() => {
+    sheet.style.display = 'none';
+    backdrop.style.display = 'none';
+    document.body.style.overflow = '';
+  }, 320);
 }
 
 function toggleMetalPriceUnit() {
   const unit = document.getElementById('metal-price-unit-toggle')?.value || 'g';
-  const base = getMetalBasePrice(currentMetal);
-  const displayPrice = unit === 'oz' ? (base * 31.1035) : base;
+  const base = getMetalBasePrice(currentMetal); // USD/gram
+  const baseDisp = metalPriceToDisplay(base);    // display currency/gram
+  const displayPrice = unit === 'oz' ? (baseDisp * 31.1035) : baseDisp;
   const inp = document.getElementById('metal-price-override-input');
   if (inp) inp.value = displayPrice.toFixed(2);
   const metalLabel = currentMetal === 'gold' ? '24K pure' : currentMetal === 'silver' ? '999 Fine' : 'Pt999';
@@ -6742,13 +6851,14 @@ function toggleMetalPriceUnit() {
 function applyMetalPriceOverride() {
   let price = parseFloat(document.getElementById('metal-price-override-input').value);
   if (!price || price <= 0) { showToast('Enter a valid price ❌'); return; }
-  // Close panel FIRST (before any re-renders that might race on iOS)
-  const panel = document.getElementById('metal-price-override-panel');
-  if (panel) panel.style.display = 'none';
+  // Close the sheet before re-renders
+  closeMetalPriceSheet();
   // Convert oz → g if user is in oz mode
   const unit = document.getElementById('metal-price-unit-toggle')?.value || 'g';
   if (unit === 'oz') price = price / 31.1035; // 1 troy oz = 31.1035g
-  updateMetalPriceOverride(currentMetal, price);
+  // Convert display currency/gram → USD/gram for internal storage
+  const priceUSD = metalPriceToUSD(price);
+  updateMetalPriceOverride(currentMetal, priceUSD);
   showToast('✅ Price updated');
 }
 
@@ -6767,7 +6877,8 @@ function renderPurityPrices(metalType) {
   const rows = purities.map(([p, mult]) => {
     const purityKey = metalType + '|' + normalizePurity(p);
     const hasOverride = overrides[purityKey] !== undefined;
-    const effectivePrice = hasOverride ? overrides[purityKey] : (base * mult);
+    const effectivePriceUSD = hasOverride ? overrides[purityKey] : (base * mult);
+    const effectivePrice = metalPriceToDisplay(effectivePriceUSD); // convert USD → display
     const overrideBadge = hasOverride
       ? `<span style="color:#10B981;font-size:0.85em;" title="Custom price set">✏️</span>`
       : '';
@@ -6786,17 +6897,7 @@ function renderPurityPrices(metalType) {
 
   el.innerHTML = `<div style="font-size:0.78em;font-weight:700;color:var(--text-med);margin-bottom:5px;">💎 Price by Purity — tap <b>Set</b> to override any row:</div>
     <table style="width:100%;border-collapse:collapse;">${rows}</table>
-    <div id="purity-override-inline" style="display:none;margin-top:8px;background:white;border:1.5px solid #DDD;border-radius:8px;padding:8px 10px;">
-      <div style="font-size:0.75em;font-weight:800;color:var(--text-dark);margin-bottom:5px;" id="poi-label">Set price for —</div>
-      <div style="display:flex;gap:6px;align-items:center;">
-        <input type="number" id="poi-input" step="0.01" placeholder="$/gram"
-          style="flex:1;border:1.5px solid #DDD;border-radius:7px;padding:5px 8px;font-size:0.9em;font-weight:700;">
-        <button onclick="applyPurityOverride()"
-          style="background:#10B981;color:white;border:none;border-radius:7px;padding:5px 10px;font-weight:800;font-size:0.82em;cursor:pointer;">✓ Save</button>
-        <button onclick="document.getElementById('purity-override-inline').style.display='none'"
-          style="background:#EEE;border:none;border-radius:7px;padding:5px 10px;font-weight:800;font-size:0.82em;cursor:pointer;color:var(--text-med);">✕</button>
-      </div>
-    </div>`;
+    `;
 }
 
 let _poiMetal = '', _poiPurity = '';
@@ -6807,14 +6908,20 @@ function openPurityOverride(metalType, purity, currentPrice) {
   const input = document.getElementById('poi-input');
   if (!panel) return;
   if (label) label.textContent = `Set ${sym()}/gram for ${purity} ${metalType.charAt(0).toUpperCase()+metalType.slice(1)}:`;
-  if (input) { input.value = currentPrice.toFixed(2); input.focus(); }
+  // currentPrice from renderPurityPrices is already in USD — convert to display
+  if (input) { input.value = metalPriceToDisplay(currentPrice).toFixed(2); input.focus(); }
   panel.style.display = '';
 }
 function applyPurityOverride() {
-  const price = parseFloat(document.getElementById('poi-input')?.value);
-  if (!price || price <= 0) { showToast('Enter a valid price ❌'); return; }
+  const priceDisp = parseFloat(document.getElementById('poi-input')?.value);
+  if (!priceDisp || priceDisp <= 0) { showToast('Enter a valid price ❌'); return; }
+  // Convert display currency/gram → USD/gram for internal storage
+  const price = metalPriceToUSD(priceDisp);
   updateMetalPriceOverride(_poiMetal, price, _poiPurity);
-  document.getElementById('purity-override-inline').style.display = 'none';
+  // Hide the purity sub-panel but keep the sheet open
+  const poi = document.getElementById('purity-override-inline');
+  if (poi) poi.style.display = 'none';
+  renderPurityPrices(currentMetal); // refresh to show updated price
 }
 
 function switchMetal(type) {
@@ -6825,7 +6932,7 @@ function switchMetal(type) {
   document.getElementById('metal-detail-usd').className='metal-detail-usd '+type;
   const basePrice = getMetalBasePrice(type);
   const hasOverride = (data._metalPriceOverrides||{})[type] !== undefined;
-  document.getElementById('metal-live-price').textContent=sym()+basePrice.toFixed(2)+(hasOverride?' ✏️':'');
+  document.getElementById('metal-live-price').textContent=sym()+metalPriceToDisplay(basePrice).toFixed(2)+(hasOverride?' ✏️':'');
   const baseLabel = type === 'gold' ? sym()+'/gram (24K pure)' : type === 'silver' ? sym()+'/gram (999 Fine)' : sym()+'/gram (Pt999)';
   const baseLabelEl = document.getElementById('metal-price-base-label');
   if (baseLabelEl) baseLabelEl.textContent = baseLabel;
@@ -6884,7 +6991,7 @@ function renderMetals() {
   if (_lp) {
     const _lpBase = getMetalBasePrice(currentMetal);
     const _lpOv = (data._metalPriceOverrides||{})[currentMetal] !== undefined;
-    _lp.textContent = sym() + _lpBase.toFixed(2) + (_lpOv?' ✏️':'');
+    _lp.textContent = sym() + metalPriceToDisplay(_lpBase).toFixed(2) + (_lpOv?' ✏️':'');
   }
   const _bll = document.getElementById('metal-price-base-label');
   if (_bll) {
