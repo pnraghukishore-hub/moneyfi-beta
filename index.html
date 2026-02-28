@@ -1622,11 +1622,11 @@
       <div class="metal-detail-grams" id="metal-detail-grams">0 g · 0.000 oz</div>
       <div class="metal-detail-usd gold" id="metal-detail-usd">$0</div>
     </div>
-    <div style="background:#F8F8F8;border-radius:8px;padding:6px 10px;font-size:0.72em;font-weight:800;color:var(--text-med);text-align:center;flex-shrink:0;">
-      <div style="font-size:0.72em;color:var(--text-light);" id="metal-price-base-label">—/gram (24K pure)</div>
-      <div style="display:flex;align-items:center;gap:6px;">
-        <span style="font-size:1.3em;font-weight:900;color:var(--text-dark);" id="metal-live-price">—</span>
-        <button onclick="showMetalPriceEdit()" style="background:#F0F4FF;border:none;border-radius:7px;padding:3px 8px;font-size:0.72em;font-weight:800;color:var(--primary);cursor:pointer;">⚙️ Price</button>
+    <div style="background:#F8F8F8;border-radius:8px;padding:6px 10px;font-size:0.72em;font-weight:800;color:var(--text-med);text-align:center;flex-shrink:0;max-width:160px;min-width:0;">
+      <div style="font-size:0.72em;color:var(--text-light);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" id="metal-price-base-label">—/gram (24K pure)</div>
+      <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;justify-content:center;">
+        <span style="font-size:1.2em;font-weight:900;color:var(--text-dark);word-break:break-all;" id="metal-live-price">—</span>
+        <button onclick="showMetalPriceEdit()" style="background:#F0F4FF;border:none;border-radius:7px;padding:3px 7px;font-size:0.7em;font-weight:800;color:var(--primary);cursor:pointer;white-space:nowrap;flex-shrink:0;">✏️ Set</button>
       </div>
       <div id="metal-price-override-panel" style="display:none;"><!-- moved to bottom sheet --></div>
     </div>
@@ -7158,7 +7158,9 @@ function renderMetalROI() {
   if (valueBar) valueBar.style.width = maxVal > 0 ? (totalValueUSD / maxVal * 100) + '%' : '0%';
 
   // Acquisition over time chart — cumulative grams by date
-  const dated = entries.filter(m => m.date).sort((a,b) => a.date.localeCompare(b.date));
+  // Prefer purchaseDate for ROI trend accuracy, fall back to entry date
+  const dated = entries.filter(m => m.purchaseDate || m.date)
+    .sort((a,b) => (a.purchaseDate||a.date).localeCompare(b.purchaseDate||b.date));
   if (!dated.length) return;
 
   const canvas = document.getElementById('metal-roi-canvas');
@@ -7173,7 +7175,7 @@ function renderMetalROI() {
   let cumGrams = 0;
   const points = dated.map(m => {
     cumGrams += Number(m.grams || m.weightGms || 0);
-    return { date: m.date, grams: cumGrams };
+    return { date: m.purchaseDate || m.date, grams: cumGrams };
   });
 
   const minG = 0, maxG = points[points.length - 1].grams;
@@ -7231,15 +7233,21 @@ function renderMetalHoldingRow(m, idx) {
   const purityTag = purity ? `<span style="background:#F5F5F5;border-radius:5px;padding:1px 6px;font-size:0.75em;font-weight:700;color:#7C3AED;">${purity}</span>` : '';
   const priceTag = `<span style="color:var(--text-light);font-size:0.75em;">$${price.toFixed(2)}/g <span style="color:#10B981;font-size:0.85em;font-weight:800;">live</span></span>`;
   const sourceTag = m._source==='networth' ? `<span style="font-size:0.7em;color:var(--text-light);"> · 📊 NW</span>` : '';
-  // Convert purchase price from its stored currency → USD for consistent display
+  // Resolve paid cost → prefer canonical costBasisUSD, fall back to legacy m.price/gram
   let paidCostUSD = 0;
-  if (m.price && m.price > 0) {
+  if (Number(m.costBasisUSD || 0) > 0) {
+    paidCostUSD = Number(m.costBasisUSD);
+  } else if (m.price && m.price > 0) {
     const pStoredCurr = m.priceCurrency || currentCurrency.code;
-    const pDispVal = convertAmt(m.price, pStoredCurr); // → currentCurrency
-    const fxToUSD = convertAmt(1, 'USD'); // 1 USD in current currency
+    const pDispVal = convertAmt(m.price, pStoredCurr);
+    const fxToUSD = convertAmt(1, 'USD');
     paidCostUSD = fxToUSD > 0 ? (pDispVal / fxToUSD) * grams : m.price * grams;
   }
-  const paidTag = paidCostUSD > 0 ? `<div style="font-size:0.7em;color:#7C3AED;font-weight:700;margin-top:1px;">paid ${fmt(convertAmt(paidCostUSD,'USD'))}</div>` : '';
+  // Show purchase date if available
+  const purchaseDateStr = m.purchaseDate
+    ? ` · <span style="font-size:0.9em;color:#9AA0B2;">${m.purchaseDate.slice(0,7)}</span>` : '';
+  const paidTag = paidCostUSD > 0
+    ? `<div style="font-size:0.7em;color:#7C3AED;font-weight:700;margin-top:1px;">paid ${fmt(convertAmt(paidCostUSD,'USD'))}${purchaseDateStr}</div>` : '';
   const qaTag = ''; // Propagation is seamless — no need to show source chip
   const delBtn = m._source==='networth'
     ? `<button class="metal-holding-del" onclick="navigateTo('networth')" title="Manage in Net Worth">↗️</button>`
@@ -7398,6 +7406,13 @@ function openEditMetalSheet(idx) {
         </div>
       </div>
 
+      <!-- Purchase date -->
+      <div style="position:relative;">
+        <div style="font-size:0.68em;font-weight:800;color:#9AA0B2;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:5px;">📅 Purchase Date <span style="font-weight:600;font-size:0.9em;">(optional — improves ROI trends)</span></div>
+        <input id="me-purchase-date" type="date"
+          style="width:100%;padding:10px 12px;border:1.5px solid #E8E8E8;border-radius:10px;font-family:Nunito,sans-serif;font-weight:700;font-size:0.9em;box-sizing:border-box;background:white;">
+      </div>
+
       <button onclick="saveMetalEdit()" style="background:#10B981;color:white;border:none;border-radius:12px;padding:14px;font-weight:900;font-size:1em;cursor:pointer;font-family:Nunito,sans-serif;">✅ Save Changes</button>
     </div>
   </div>`;
@@ -7424,6 +7439,10 @@ function openEditMetalSheet(idx) {
     totalInDisp = (perGramDisp * grams).toFixed(2);
   }
   if (totalInDisp) document.getElementById('me-cost-total').value = totalInDisp;
+
+  // Pre-fill purchase date (use m.purchaseDate if set, else fall back to m.date)
+  const dateEl = document.getElementById('me-purchase-date');
+  if (dateEl) dateEl.value = m.purchaseDate || m.date || '';
 
   modal.dataset.idx = idx;
   modal.style.display = 'flex';
@@ -7485,15 +7504,22 @@ function saveMetalEdit() {
     }
   }
 
+  // Save purchase date if provided
+  const purchaseDateEl = document.getElementById('me-purchase-date');
+  const purchaseDate = purchaseDateEl ? purchaseDateEl.value.trim() : '';
+
   const updatedEntry = { ...m, metalType:type, name, itemName:name, grams, weightGms:grams, purity, occasion, costBasisUSD };
+  if (purchaseDate) updatedEntry.purchaseDate = purchaseDate;
   // Clear legacy per-gram price fields to avoid double-counting in ROI
   delete updatedEntry.price;
   delete updatedEntry.priceCurrency;
 
   data._metals[idx] = updatedEntry;
   save(); renderMetals(); renderNetWorth();
-  modal.remove();
-  showToast('✅ Metal entry updated');
+  // Animate close like a bottom sheet sliding down
+  const sheet = modal.querySelector('div');
+  if (sheet) { sheet.style.transition = 'transform 0.28s ease'; sheet.style.transform = 'translateY(100%)'; }
+  setTimeout(() => { modal.remove(); showToast('✅ Entry saved successfully!'); }, 260);
 }
 
 // ══════════════════════════════════════════════════════
