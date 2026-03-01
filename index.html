@@ -11622,8 +11622,15 @@ function _doFirebaseSave() {
   batch.set(baseRef.collection('appData').doc('assets'),
     { ...chunk2, _savedAt: firebase.firestore.FieldValue.serverTimestamp() });
 
+  window._ownSaveInFlight = true; // flag so onSnapshot knows this is our own write
   batch.commit()
-    .then(() => showSyncStatus('✅ Synced', '#10B981', 2000))
+    .then(() => {
+      showSyncStatus('✅ Synced', '#10B981', 2000);
+      // Re-render all screens so UI reflects confirmed cloud state
+      try { renderNetWorth(); } catch(e) {}
+      try { renderMetals(); } catch(e) {}
+      try { renderHome(); } catch(e) {}
+    })
     .catch(err => {
       console.error('Firebase save error:', err);
       showSyncStatus('⚠️ Sync failed — saved locally', '#F59E0B', 3000);
@@ -11671,6 +11678,9 @@ async function firebaseLoad(uid) {
     // Re-render everything with cloud data
     applyStoredTheme();
     renderHome();
+    try { renderNetWorth(); } catch(e) {}
+    try { renderMetals(); } catch(e) {}
+    try { renderTransactions && renderTransactions(); } catch(e) {}
     populateDataMonthSelect && populateDataMonthSelect();
 
   } catch (err) {
@@ -11688,9 +11698,22 @@ function startRealtimeSync(uid) {
   const mainRef = baseRef.collection('appData').doc('main');
   _unsubscribeListener = mainRef.onSnapshot(snap => {
     if (!snap.exists || snap.metadata.hasPendingWrites) return;
+    // Check if this snapshot was triggered by our own recent save
+    // fromCache=false + hasPendingWrites=false = server confirmed our write OR another device
+    // Use a flag set by _doFirebaseSave to distinguish
+    if (window._ownSaveInFlight) {
+      // Our own write just confirmed — data is already correct in memory, just re-render
+      window._ownSaveInFlight = false;
+      try { renderNetWorth(); } catch(e) {}
+      try { renderMetals(); } catch(e) {}
+      try { renderHome(); } catch(e) {}
+      return;
+    }
     // Another device updated data — reload silently
     firebaseLoad(uid).then(() => {
       showSyncStatus('🔄 Updated from another device', '#8B5CF6', 2500);
+      try { renderNetWorth(); } catch(e) {}
+      try { renderMetals(); } catch(e) {}
     });
   }, err => console.warn('Realtime sync error:', err));
 }
