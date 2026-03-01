@@ -6003,11 +6003,8 @@ function listEditTx(monthKey, type, idx) {
   const typeMap = {expense:'expenses',income:'income',investment:'investments',debt:'debts',given:'givenToOthers',additional:'additional'};
   const tx = data[monthKey] && data[monthKey][typeMap[type]] && data[monthKey][typeMap[type]][idx];
   if (!tx) return;
-  // Switch to calendar mode, set the selected day, then open the edit sheet
-  calSelectedDay = tx.date || null;
-  viewMonth = monthKey;
-  setCalView('calendar'); // correct function name
-  setTimeout(() => openEditTx(monthKey, type, idx), 100);
+  // Open edit sheet directly — no view switching, stays in list mode
+  openEditTx(monthKey, type, idx);
 }
 function listDeleteTx(monthKey, type, idx) {
   const typeMap = {expense:'expenses',income:'income',investment:'investments',debt:'debts',given:'givenToOthers',additional:'additional'};
@@ -7581,8 +7578,9 @@ function saveMetalEdit() {
   delete updatedEntry.priceCurrency;
 
   data._metals[idx] = updatedEntry;
-  save(); renderMetals(); renderNetWorth();
-  // Animate close — find the inner content sheet (first direct child div)
+  save(); // persist to localStorage + queue Firebase sync
+
+  // Animate close FIRST — then render (so renderMetals() doesn't destroy the modal mid-animation)
   const innerSheet = modal.firstElementChild;
   if (innerSheet) {
     innerSheet.style.transition = 'transform 0.28s cubic-bezier(0.32,0.72,0,1)';
@@ -7590,7 +7588,12 @@ function saveMetalEdit() {
   }
   modal.style.background = 'rgba(0,0,0,0)';
   modal.style.transition = 'background 0.28s';
-  setTimeout(() => { modal.remove(); showToast('✅ Entry saved successfully!'); }, 280);
+  setTimeout(() => {
+    modal.remove();
+    renderMetals();
+    renderNetWorth();
+    showToast('✅ Entry saved successfully!');
+  }, 280);
 }
 
 // ══════════════════════════════════════════════════════
@@ -10500,20 +10503,24 @@ function saveNWAccount() {
     data._nwAccounts.push({ id, name, type, balance, currency, lastUpdated, meta });
   }
 
-  save();
-  renderNetWorth(); // render first so UI updates before sheet closes
-  renderHome();     // home card totals too
+  save(); // persist + queue Firebase sync
+
   // Capture edit state before resetting
   const wasEdit = !!nwSheetEditId;
-  // Animate sheet closed
+
+  // Animate sheet closed FIRST
   const nwSheet = document.getElementById('nw-sheet');
   const nwOverlay = document.getElementById('nw-sheet-overlay');
   if (nwSheet) nwSheet.classList.remove('open');
   if (nwOverlay) nwOverlay.classList.remove('open');
+
+  // After animation completes: reset state, render updated data, show toast
   setTimeout(() => {
     nwSheetType = null;
     nwSheetEditId = null;
-    showToast(wasEdit ? '✅ Account updated successfully!' : '✅ Account added!');
+    renderNetWorth();
+    renderHome();
+    showToast(wasEdit ? '✅ Account updated!' : '✅ Account added!');
   }, 320);
 }
 
@@ -11622,16 +11629,17 @@ function _doFirebaseSave() {
   batch.set(baseRef.collection('appData').doc('assets'),
     { ...chunk2, _savedAt: firebase.firestore.FieldValue.serverTimestamp() });
 
-  window._ownSaveInFlight = true; // flag so onSnapshot knows this is our own write
+  window._ownSaveInFlight = true; // suppress onSnapshot re-fetch for own write
   batch.commit()
     .then(() => {
       showSyncStatus('✅ Synced', '#10B981', 2000);
-      // Re-render all screens so UI reflects confirmed cloud state
+      // Re-render all screens with confirmed data
+      try { renderHome(); } catch(e) {}
       try { renderNetWorth(); } catch(e) {}
       try { renderMetals(); } catch(e) {}
-      try { renderHome(); } catch(e) {}
     })
     .catch(err => {
+      window._ownSaveInFlight = false;
       console.error('Firebase save error:', err);
       showSyncStatus('⚠️ Sync failed — saved locally', '#F59E0B', 3000);
     });
@@ -11698,18 +11706,12 @@ function startRealtimeSync(uid) {
   const mainRef = baseRef.collection('appData').doc('main');
   _unsubscribeListener = mainRef.onSnapshot(snap => {
     if (!snap.exists || snap.metadata.hasPendingWrites) return;
-    // Check if this snapshot was triggered by our own recent save
-    // fromCache=false + hasPendingWrites=false = server confirmed our write OR another device
-    // Use a flag set by _doFirebaseSave to distinguish
     if (window._ownSaveInFlight) {
-      // Our own write just confirmed — data is already correct in memory, just re-render
+      // Our own write just confirmed — data already correct in memory, just re-render
       window._ownSaveInFlight = false;
-      try { renderNetWorth(); } catch(e) {}
-      try { renderMetals(); } catch(e) {}
-      try { renderHome(); } catch(e) {}
-      return;
+      return; // _doFirebaseSave .then() already handles the re-render
     }
-    // Another device updated data — reload silently
+    // Another device updated — reload from cloud and re-render all screens
     firebaseLoad(uid).then(() => {
       showSyncStatus('🔄 Updated from another device', '#8B5CF6', 2500);
       try { renderNetWorth(); } catch(e) {}
