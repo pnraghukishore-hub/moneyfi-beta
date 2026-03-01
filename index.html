@@ -6003,8 +6003,7 @@ function listEditTx(monthKey, type, idx) {
   const typeMap = {expense:'expenses',income:'income',investment:'investments',debt:'debts',given:'givenToOthers',additional:'additional'};
   const tx = data[monthKey] && data[monthKey][typeMap[type]] && data[monthKey][typeMap[type]][idx];
   if (!tx) return;
-  // Open edit sheet directly — no view switching, stays in list mode
-  openEditTx(monthKey, type, idx);
+  openEditTx(monthKey, type, idx); // open edit sheet directly, stay in list view
 }
 function listDeleteTx(monthKey, type, idx) {
   const typeMap = {expense:'expenses',income:'income',investment:'investments',debt:'debts',given:'givenToOthers',additional:'additional'};
@@ -7578,9 +7577,9 @@ function saveMetalEdit() {
   delete updatedEntry.priceCurrency;
 
   data._metals[idx] = updatedEntry;
-  save(); // persist to localStorage + queue Firebase sync
+  save();
 
-  // Animate close FIRST — then render (so renderMetals() doesn't destroy the modal mid-animation)
+  // Animate close FIRST — render after modal is fully gone
   const innerSheet = modal.firstElementChild;
   if (innerSheet) {
     innerSheet.style.transition = 'transform 0.28s cubic-bezier(0.32,0.72,0,1)';
@@ -7593,7 +7592,7 @@ function saveMetalEdit() {
     renderMetals();
     renderNetWorth();
     showToast('✅ Entry saved successfully!');
-  }, 280);
+  }, 300);
 }
 
 // ══════════════════════════════════════════════════════
@@ -10503,25 +10502,23 @@ function saveNWAccount() {
     data._nwAccounts.push({ id, name, type, balance, currency, lastUpdated, meta });
   }
 
-  save(); // persist + queue Firebase sync
-
-  // Capture edit state before resetting
+  save();
   const wasEdit = !!nwSheetEditId;
 
-  // Animate sheet closed FIRST
+  // Close sheet FIRST — let iOS fully remove the overlay layer
   const nwSheet = document.getElementById('nw-sheet');
   const nwOverlay = document.getElementById('nw-sheet-overlay');
   if (nwSheet) nwSheet.classList.remove('open');
   if (nwOverlay) nwOverlay.classList.remove('open');
 
-  // After animation completes: reset state, render updated data, show toast
+  // After overlay is gone: reset state, render fresh, show toast
   setTimeout(() => {
     nwSheetType = null;
     nwSheetEditId = null;
     renderNetWorth();
     renderHome();
     showToast(wasEdit ? '✅ Account updated!' : '✅ Account added!');
-  }, 320);
+  }, 350);
 }
 
 // ══════════════════════════════════════════════════════
@@ -11629,14 +11626,13 @@ function _doFirebaseSave() {
   batch.set(baseRef.collection('appData').doc('assets'),
     { ...chunk2, _savedAt: firebase.firestore.FieldValue.serverTimestamp() });
 
-  window._ownSaveInFlight = true; // suppress onSnapshot re-fetch for own write
+  window._ownSaveInFlight = true;
   batch.commit()
     .then(() => {
       showSyncStatus('✅ Synced', '#10B981', 2000);
-      // Re-render all screens with confirmed data
-      try { renderHome(); } catch(e) {}
       try { renderNetWorth(); } catch(e) {}
       try { renderMetals(); } catch(e) {}
+      try { renderHome(); } catch(e) {}
     })
     .catch(err => {
       window._ownSaveInFlight = false;
@@ -11706,12 +11702,12 @@ function startRealtimeSync(uid) {
   const mainRef = baseRef.collection('appData').doc('main');
   _unsubscribeListener = mainRef.onSnapshot(snap => {
     if (!snap.exists || snap.metadata.hasPendingWrites) return;
+    // Suppress re-fetch for our own writes — _doFirebaseSave handles re-render
     if (window._ownSaveInFlight) {
-      // Our own write just confirmed — data already correct in memory, just re-render
       window._ownSaveInFlight = false;
-      return; // _doFirebaseSave .then() already handles the re-render
+      return;
     }
-    // Another device updated — reload from cloud and re-render all screens
+    // Another device updated — reload and re-render all screens
     firebaseLoad(uid).then(() => {
       showSyncStatus('🔄 Updated from another device', '#8B5CF6', 2500);
       try { renderNetWorth(); } catch(e) {}
